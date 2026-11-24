@@ -15,7 +15,7 @@ describe('TradeIngestionService', () => {
     holdingSeconds: 3600,
     openPrice: new Decimal('2500.00'),
     closePrice: new Decimal('2520.00'),
-    stopLoss: new Decimal('2500.00'), // moved to BE
+    stopLoss: new Decimal('2500.00'),
     takeProfit: new Decimal('2530.00'),
     initialStopLoss: new Decimal('2490.00'),
     initialRiskAmount: new Decimal('1000.00'),
@@ -27,7 +27,7 @@ describe('TradeIngestionService', () => {
     ...overrides,
   });
 
-  it('preserves user note, tags, and manual risk fields on idempotent re-sync', async () => {
+  it('preserves user note, pre/post review, screenshot, tags, and manual risk fields on re-sync', async () => {
     const updateCalls: Array<{ where: unknown; data: Record<string, unknown> }> = [];
     const createCalls: Array<{ data: Record<string, unknown> }> = [];
 
@@ -41,6 +41,9 @@ describe('TradeIngestionService', () => {
       stopLoss: new Prisma.Decimal('2500.00000000'),
       takeProfit: new Prisma.Decimal('2530.00000000'),
       note: 'Tier SSS setup - clean liquidity sweep',
+      preTradePlan: 'Wait M5 BOS',
+      postTradeReview: 'Held to target',
+      screenshotUrl: 'https://www.tradingview.com/x/test1234/',
     };
 
     const mockTx = {
@@ -53,6 +56,10 @@ describe('TradeIngestionService', () => {
           updateCalls.push(args);
           return args.data;
         }),
+      },
+      tradingAccount: {
+        update: jest.fn(),
+        findUnique: jest.fn(),
       },
     };
 
@@ -80,47 +87,104 @@ describe('TradeIngestionService', () => {
     expect(updateCalls).toHaveLength(1);
 
     const updateData = updateCalls[0].data;
-    // Must NEVER overwrite note, tags, or manual initialStopLoss / initialRiskAmount
     expect(updateData.note).toBeUndefined();
+    expect(updateData.preTradePlan).toBeUndefined();
+    expect(updateData.postTradeReview).toBeUndefined();
+    expect(updateData.screenshotUrl).toBeUndefined();
     expect(updateData.tags).toBeUndefined();
     expect(updateData.initialStopLoss).toBeUndefined();
     expect(updateData.initialRiskAmount).toBeUndefined();
-    // Should recompute rMultiple using preserved manual initialRiskAmount (1993 / 500 = 3.9860)
     expect((updateData.rMultiple as Prisma.Decimal).toFixed(4)).toBe('3.9860');
   });
 
-  it('inserts new trade with computed R-Multiple when externalId does not exist', async () => {
-    const createCalls: Array<{ data: Record<string, unknown> }> = [];
+  it('sets currentBalance & currentEquity directly from live MT5 EA without double-subtracting PnL', async () => {
+    const accountUpdateCalls: Array<{ where: unknown; data: Record<string, unknown> }> = [];
     const mockTx = {
       trade: {
-        create: jest.fn(async (args) => {
-          createCalls.push(args);
+        create: jest.fn(async (args) => args.data),
+        update: jest.fn(),
+      },
+      tradingAccount: {
+        update: jest.fn(async (args) => {
+          accountUpdateCalls.push(args);
           return args.data;
         }),
-        update: jest.fn(),
       },
     };
 
     const mockPrisma = {
-      trade: {
-        findMany: jest.fn(async () => []),
-      },
+      trade: { findMany: jest.fn(async () => []) },
       $transaction: jest.fn(async (fn: (tx: typeof mockTx) => Promise<void>) => fn(mockTx)),
-      syncLog: {
-        create: jest.fn(async () => ({ id: 'log-2' })),
-      },
+      syncLog: { create: jest.fn(async () => ({ id: 'log-live' })) },
     } as unknown as PrismaService;
 
     const service = new TradeIngestionService(mockPrisma);
-    const summary = await service.ingestTrades([buildNormalizedTrade()], {
-      accountId: 'acc-1',
-      source: TradeSource.MT5_WEBHOOK,
+
+    // Account had -$51,839.86 closed loss, MT5 live balance is $48,164.14 (after deposits / 100k start)
+    await service.ingestTrades(
+      [
+        buildNormalizedTrade({
+          grossPnl: new Decimal('-51839.86'),
+          commission: new Decimal('0'),
+          netPnl: new Decimal('-51839.86'),
+        }),
+      ],
+      {
+        accountId: 'acc-demo',
+        source: TradeSource.MT5_WEBHOOK,
+        accountBalance: '48164.14',
+        accountEquity: '48164.14',
+      },
+    );
+
+    expect(accountUpdateCalls).toHaveLength(1);
+    expect((accountUpdateCalls[0].data.currentBalance as Prisma.Decimal).toFixed(2)).toBe(
+      '48164.14',
+    );
+    expect((accountUpdateCalls[0].data.currentEquity as Prisma.Decimal).toFixed(2)).toBe(
+      '48164.14',
+    );
+  });
+
+  it('computes currentBalance = initialBalance + sum(closedTrades.netPnl) on HTML/CSV import', async () => {
+    const accountUpdateCalls: Array<{ where: unknown; data: Record<string, unknown> }> = [];
+    const mockTx = {
+      trade: {
+        create: jest.fn(async (args) => args.data),
+        update: jest.fn(),
+        aggregate: jest.fn(async () => ({
+          _sum: { netPnl: new Prisma.Decimal('1250.50') },
+        })),
+      },
+      tradingAccount: {
+        findUnique: jest.fn(async () => ({
+          id: 'acc-import',
+          initialBalance: new Prisma.Decimal('10000.00'),
+        })),
+        update: jest.fn(async (args) => {
+          accountUpdateCalls.push(args);
+          return args.data;
+        }),
+      },
+    };
+
+    const mockPrisma = {
+      trade: { findMany: jest.fn(async () => []) },
+      $transaction: jest.fn(async (fn: (tx: typeof mockTx) => Promise<void>) => fn(mockTx)),
+      syncLog: { create: jest.fn(async () => ({ id: 'log-imp' })) },
+    } as unknown as PrismaService;
+
+    const service = new TradeIngestionService(mockPrisma);
+
+    await service.ingestTrades([buildNormalizedTrade({ netPnl: new Decimal('1250.50') })], {
+      accountId: 'acc-import',
+      source: TradeSource.MT5_IMPORT,
+      fileName: 'ReportHistory.html',
     });
 
-    expect(summary.insertedCount).toBe(1);
-    expect(summary.updatedCount).toBe(0);
-    expect(createCalls).toHaveLength(1);
-    // 1993 / 1000 = 1.9930R
-    expect((createCalls[0].data.rMultiple as Prisma.Decimal).toFixed(4)).toBe('1.9930');
+    expect(accountUpdateCalls).toHaveLength(1);
+    expect((accountUpdateCalls[0].data.currentBalance as Prisma.Decimal).toFixed(2)).toBe(
+      '11250.50',
+    );
   });
 });

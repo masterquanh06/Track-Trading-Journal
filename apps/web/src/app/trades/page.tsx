@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import {
   BookOpen,
+  Camera,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -48,6 +49,7 @@ const SIDE_OPTIONS: Array<{ value: SideFilter; label: string }> = [
 
 export default function TradesPage() {
   const {
+    accounts,
     filters,
     setFilters,
     symbols,
@@ -433,10 +435,18 @@ export default function TradesPage() {
                             {tag.name}
                           </span>
                         ))}
-                        {trade.note && (
+                        {trade.screenshotUrl && (
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded bg-indigo-500/15 text-indigo-300"
+                            title="Đã đính kèm ảnh biểu đồ"
+                          >
+                            <Camera className="h-3 w-3" />
+                          </span>
+                        )}
+                        {(trade.note || trade.preTradePlan || trade.postTradeReview) && (
                           <span
                             className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/[0.05] text-zinc-400"
-                            title={trade.note}
+                            title={trade.note ?? trade.preTradePlan ?? trade.postTradeReview ?? ''}
                           >
                             <FileText className="h-3 w-3" />
                           </span>
@@ -482,6 +492,13 @@ export default function TradesPage() {
       <TradeDetailDrawer
         trade={selectedTrade}
         allTags={tags}
+        accountBalance={
+          selectedTrade
+            ? Number(
+                accounts.find((a) => a.id === selectedTrade.accountId)?.currentBalance ?? '10000',
+              )
+            : 10000
+        }
         timezone={tz}
         onClose={() => setSelectedTrade(null)}
         onUpdated={handleUpdated}

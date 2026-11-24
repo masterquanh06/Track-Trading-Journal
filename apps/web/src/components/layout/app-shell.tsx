@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   Upload,
   Wallet,
 } from 'lucide-react';
@@ -153,21 +152,10 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* Footer: Active Account Card + Quick Import CTA */}
-      <div className="space-y-2.5 border-t border-white/[0.08] p-3">
+      {/* Footer: Active Account Balance Card + Expand Toggle */}
+      <div className="border-t border-white/[0.08] p-3">
         {collapsed ? (
-          <div className="flex flex-col items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link
-                  href="/import"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500 text-white shadow-sm hover:bg-indigo-400"
-                >
-                  <Plus className="h-4 w-4" />
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">Import / Sync MT5</TooltipContent>
-            </Tooltip>
+          <div className="flex flex-col items-center">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -183,30 +171,20 @@ function SidebarContent({
             </Tooltip>
           </div>
         ) : (
-          <>
-            <div className="rounded-xl border border-white/[0.07] bg-[#111216] p-3">
-              <div className="flex items-center justify-between">
-                <span className="truncate text-[11px] font-medium text-zinc-400">
-                  {selectedAccount ? selectedAccount.name : 'Tổng Equity danh mục'}
-                </span>
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-              </div>
-              <p className="font-num mt-1 text-[15px] font-semibold text-white">
-                {formatCurrency(equityValue, activeAccountCurrency)}
-              </p>
-              <p className={cn('font-num mt-0.5 text-[11px]', pnlColorClass(pnlValue))}>
-                {formatCurrency(pnlValue, activeAccountCurrency, true)} Net PnL
-              </p>
+          <div className="rounded-xl border border-white/[0.07] bg-[#111216] p-3">
+            <div className="flex items-center justify-between">
+              <span className="truncate text-[11px] font-medium text-zinc-400">
+                {selectedAccount ? selectedAccount.name : 'Tổng Equity danh mục'}
+              </span>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
             </div>
-
-            <Link
-              href="/import"
-              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-500 px-3 text-[12.5px] font-medium text-white shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:bg-indigo-400"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Import / Sync
-            </Link>
-          </>
+            <p className="font-num mt-1 text-[15px] font-semibold text-white">
+              {formatCurrency(equityValue, activeAccountCurrency)}
+            </p>
+            <p className={cn('font-num mt-0.5 text-[11px]', pnlColorClass(pnlValue))}>
+              {formatCurrency(pnlValue, activeAccountCurrency, true)} Net PnL
+            </p>
+          </div>
         )}
       </div>
     </aside>

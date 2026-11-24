@@ -23,5 +23,7 @@ Thumbs.db
 .vscode/
 .idea/
 
-# MT5 compiled binaries
+# MT5 compiled binaries (keep public downloadable .ex5)
 ea/*.ex5
+ea/*.log
+!apps/web/public/downloads/*.ex5

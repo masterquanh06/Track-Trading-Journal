@@ -24,9 +24,7 @@ export const NullableDecimalStringSchema = z
 
 /**
  * Payload sent by MT5 EA for a single fully-closed position (remainingVolume == 0).
- * All partial-close deals belonging to `positionId` are aggregated by the EA.
- * Timestamps are sent in broker server time (YYYY.MM.DD HH:mm:ss) so backend
- * converts accurately using `account.brokerTimezone` -> UTC (safe on weekends).
+ * Non-trade deals (DEAL_TYPE_BALANCE, CREDIT, BONUS, etc.) are strictly excluded.
  */
 export const Mt5WebhookTradeSchema = z.object({
   positionId: z.union([z.string(), z.number()]).transform((v) => String(v).trim()),
@@ -59,6 +57,8 @@ export const Mt5SingleWebhookSchema = z.object({
   broker: z.string().trim().optional(),
   currency: z.string().trim().min(1).max(10).optional(),
   brokerTimezone: z.string().trim().optional(),
+  accountBalance: NullableDecimalStringSchema.optional(),
+  accountEquity: NullableDecimalStringSchema.optional(),
   trade: Mt5WebhookTradeSchema,
 });
 
@@ -69,6 +69,8 @@ export const Mt5BatchWebhookSchema = z.object({
   broker: z.string().trim().optional(),
   currency: z.string().trim().min(1).max(10).optional(),
   brokerTimezone: z.string().trim().optional(),
+  accountBalance: NullableDecimalStringSchema.optional(),
+  accountEquity: NullableDecimalStringSchema.optional(),
   trades: z.array(Mt5WebhookTradeSchema),
 });
 

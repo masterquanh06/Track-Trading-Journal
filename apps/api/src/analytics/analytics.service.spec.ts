@@ -202,11 +202,57 @@ describe('AnalyticsService', () => {
     expect(breakdowns.byTag[0].netPnl).toBe('900.00');
     expect(breakdowns.byTag[0].avgR).toBe(2.25);
 
+    // Session breakdown by UTC open hour:
+    // t1 (01:30 UTC) -> Tokyo, t2 (18:30 UTC) -> New York, t3 (07:00 UTC) -> Tokyo
+    const tokyo = breakdowns.bySession.find((s) => s.key === 'tokyo')!;
+    const london = breakdowns.bySession.find((s) => s.key === 'london')!;
+    const newYork = breakdowns.bySession.find((s) => s.key === 'new_york')!;
+    expect(tokyo.tradeCount).toBe(2);
+    expect(tokyo.netPnl).toBe('900.00');
+    expect(london.tradeCount).toBe(0);
+    expect(newYork.tradeCount).toBe(1);
+    expect(newYork.netPnl).toBe('-600.00');
+
     // Calendar PnL in UTC+7: t2 closed at 18:34 UTC Mon -> 2026-05-05 in UTC+7!
     const calendar = await service.getCalendar({ timezone: 'Asia/Ho_Chi_Minh' });
     expect(calendar).toEqual([
       { date: '2026-05-04', netPnl: '400.00', tradeCount: 1, winCount: 1, lossCount: 0 },
       { date: '2026-05-05', netPnl: '-100.00', tradeCount: 2, winCount: 1, lossCount: 1 },
     ]);
+  });
+
+  it('reconciles startingEquity & endingEquity with live currentBalance without double-subtracting', async () => {
+    // Account has live currentBalance = 48,164.14 after +300 netPnl from synced trades
+    // Even if user mistakenly entered initialBalance = 48164, endingEquity MUST equal 48,164.14!
+    const mockPrisma = {
+      tradingAccount: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'acc-1',
+            initialBalance: new Prisma.Decimal('48164.00'),
+            currentBalance: new Prisma.Decimal('48164.14'),
+          },
+        ]),
+      },
+      trade: {
+        groupBy: jest.fn(async () => [
+          { accountId: 'acc-1', _sum: { netPnl: new Prisma.Decimal('300.00') } },
+        ]),
+        aggregate: jest.fn(async () => ({ _sum: { netPnl: null } })),
+        findMany: jest.fn(async () => sampleTrades),
+      },
+    } as unknown as PrismaService;
+
+    const mockDefaultUser = {
+      getDefaultUser: jest.fn(async () => defaultUser),
+    } as unknown as DefaultUserService;
+
+    const service = new AnalyticsService(mockPrisma, mockDefaultUser);
+    const overview = await service.getOverview({ timezone: 'Asia/Ho_Chi_Minh' });
+
+    expect(overview.startingEquity).toBe('47864.14');
+    expect(overview.endingEquity).toBe('48164.14');
+    expect(overview.zellaScore.overall).toBeGreaterThan(0);
+    expect(overview.zellaScore.metrics).toHaveLength(5);
   });
 });

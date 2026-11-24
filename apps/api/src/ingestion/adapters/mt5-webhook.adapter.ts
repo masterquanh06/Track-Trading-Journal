@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TradeDirection, TradeSource } from '@prisma/client';
-import Decimal from 'decimal.js';
 import { Mt5WebhookTrade } from '@trackdailytrade/shared';
 import { toDecimal, toDecimalOrZero } from '../../common/decimal.util';
 import { parseBrokerTimeToUtc } from '../../common/timezone.util';
@@ -10,6 +9,18 @@ import {
   ITradeIngestionAdapter,
   NormalizedTradeInput,
 } from '../interfaces/trade-ingestion-adapter.interface';
+
+const NON_TRADE_SYMBOLS = new Set([
+  'BALANCE',
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'CREDIT',
+  'BONUS',
+  'CHARGE',
+  'CORRECTION',
+  'COMMISSION',
+  'INTEREST',
+]);
 
 @Injectable()
 export class Mt5WebhookAdapter implements ITradeIngestionAdapter<Mt5WebhookTrade[]> {
@@ -25,6 +36,20 @@ export class Mt5WebhookAdapter implements ITradeIngestionAdapter<Mt5WebhookTrade
 
     for (const item of input) {
       try {
+        const cleanSymbol = item.symbol.trim().toUpperCase();
+        if (!cleanSymbol || NON_TRADE_SYMBOLS.has(cleanSymbol)) {
+          skippedRows += 1;
+          warnings.push(`Skipped non-trade deal ${item.positionId} (${cleanSymbol || 'EMPTY'})`);
+          continue;
+        }
+
+        const dirUpper = item.direction.toUpperCase();
+        if (dirUpper !== 'BUY' && dirUpper !== 'SELL') {
+          skippedRows += 1;
+          warnings.push(`Skipped non-trade direction ${dirUpper} on ${item.positionId}`);
+          continue;
+        }
+
         const openTime = parseBrokerTimeToUtc(item.openTimeServer, context.brokerTimezone);
         const closeTime = parseBrokerTimeToUtc(item.closeTimeServer, context.brokerTimezone);
         const holdingSeconds = Math.max(
@@ -33,14 +58,16 @@ export class Mt5WebhookAdapter implements ITradeIngestionAdapter<Mt5WebhookTrade
         );
 
         const volume = toDecimalOrZero(item.volume);
-        if (volume.lessThanOrEqualTo(0)) {
+        const openPrice = toDecimalOrZero(item.openPrice);
+        const closePrice = toDecimalOrZero(item.closePrice);
+
+        // Balance/credit operations in MT5 have volume == 0 or openPrice == 0 -> reject strictly
+        if (volume.lessThanOrEqualTo(0) || openPrice.lessThanOrEqualTo(0) || closePrice.lessThanOrEqualTo(0)) {
           skippedRows += 1;
-          warnings.push(`Skipped position ${item.positionId}: non-positive volume`);
+          warnings.push(`Skipped position ${item.positionId}: non-trade zero volume/price`);
           continue;
         }
 
-        const openPrice = toDecimalOrZero(item.openPrice);
-        const closePrice = toDecimalOrZero(item.closePrice);
         const stopLoss = toDecimal(item.stopLoss);
         const takeProfit = toDecimal(item.takeProfit);
         const initialStopLoss = toDecimal(item.initialStopLoss);
@@ -55,8 +82,8 @@ export class Mt5WebhookAdapter implements ITradeIngestionAdapter<Mt5WebhookTrade
 
         trades.push({
           externalId: item.positionId,
-          symbol: item.symbol.toUpperCase(),
-          direction: item.direction as TradeDirection,
+          symbol: cleanSymbol,
+          direction: dirUpper as TradeDirection,
           volume,
           openTime,
           closeTime,

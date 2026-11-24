@@ -2,11 +2,15 @@
 
 import * as React from 'react';
 import {
+  Check,
   CheckCircle2,
+  Copy,
+  Download,
   FileSpreadsheet,
   RefreshCw,
   Upload,
   X,
+  Zap,
 } from 'lucide-react';
 import { useGlobalFilters } from '@/components/layout/filter-context';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, type ImportResultDto, type SyncLogDto } from '@/lib/api';
+import { api, API_BASE_URL, type ImportResultDto, type SyncLogDto } from '@/lib/api';
 import {
   BROKER_TIMEZONE_PRESETS,
   formatCurrency,
@@ -38,12 +42,14 @@ export default function ImportPage() {
   const [preview, setPreview] = React.useState<ImportResultDto | null>(null);
   const [finalResult, setFinalResult] = React.useState<ImportResultDto | null>(null);
   const [logs, setLogs] = React.useState<SyncLogDto[]>([]);
+  const [copiedWebhook, setCopiedWebhook] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const tz = filters.timezone ?? 'Asia/Ho_Chi_Minh';
   const shortTz = getShortTimezoneLabel(tz);
+  const batchWebhookUrl = `${API_BASE_URL.replace('localhost', '127.0.0.1')}/webhooks/mt5/batch`;
 
   React.useEffect(() => {
     if (!accountId && accounts.length > 0) {
@@ -64,6 +70,16 @@ export default function ImportPage() {
   React.useEffect(() => {
     void loadLogs();
   }, [loadLogs, refreshTick]);
+
+  const handleCopyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(batchWebhookUrl);
+      setCopiedWebhook(true);
+      setTimeout(() => setCopiedWebhook(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleAccountChange = (nextId: string) => {
     setAccountId(nextId);
@@ -140,16 +156,96 @@ export default function ImportPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-white">Nhập dữ liệu &amp; Đồng bộ</h1>
         <p className="mt-0.5 text-xs text-zinc-400">
-          Tải lên MT5 Trade History Report (.html / .htm UTF-16LE &amp; UTF-8 hoặc .csv). Hệ thống tự
-          chống trùng lặp theo Position ID và bảo toàn ghi chú, Tag đã gắn.
+          Đồng bộ tự động từ MetaTrader 5 bằng file EA dựng sẵn (.ex5) hoặc tải lên báo cáo lịch sử
+          (.html / .csv).
         </p>
       </div>
 
+      {/* Quick Download MT5 EA (.ex5) — 1-Minute Setup */}
+      <Card className="border-indigo-500/25 bg-gradient-to-br from-[#131520] via-[#111216] to-[#111216]">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="default">
+                <Zap className="h-3 w-3" />
+                Auto-Sync Realtime · v1.10
+              </Badge>
+              <span className="text-xs text-zinc-400">Không cần mở MetaEditor</span>
+            </div>
+            <CardTitle className="mt-2 text-base">
+              Tải nhanh MT5 Expert Advisor (TrackDailyTrade.ex5)
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Tự động đẩy Balance/Equity thực tế + lệnh đóng theo thời gian thực và lọc sạch giao
+              dịch nạp/rút tiền.
+            </CardDescription>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <a href="/downloads/TrackDailyTrade.ex5" download="TrackDailyTrade.ex5">
+              <Button size="sm">
+                <Download className="h-3.5 w-3.5" />
+                Tải TrackDailyTrade.ex5
+              </Button>
+            </a>
+            <a href="/downloads/TrackDailyTrade.mq5" download="TrackDailyTrade.mq5">
+              <Button size="sm" variant="secondary">
+                Mã nguồn .mq5
+              </Button>
+            </a>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-400">Bước 1 · Cho phép WebRequest</span>
+              <p className="mt-1 leading-relaxed text-zinc-400">
+                Trong MT5 vào <strong>Công cụ → Tùy chọn → Công cụ đặc biệt</strong>, tích chọn{' '}
+                <em>Cho phép algorithmic trading</em> &amp; thêm URL bên dưới.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-400">Bước 2 · Chép file .ex5</span>
+              <p className="mt-1 leading-relaxed text-zinc-400">
+                Chọn <strong>Tập tin → Mở thư mục dữ liệu</strong>, dán file{' '}
+                <code className="text-zinc-200">TrackDailyTrade.ex5</code> vào thư mục{' '}
+                <code className="text-zinc-200">MQL5/Experts</code> rồi bấm Làm mới Navigator.
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-400">Bước 3 · Kéo vào 1 biểu đồ</span>
+              <p className="mt-1 leading-relaxed text-zinc-400">
+                Kéo <strong>TrackDailyTrade</strong> thả vào 1 biểu đồ bất kỳ và bấm OK. Nút{' '}
+                <strong className="text-zinc-200">Sync Now (7d)</strong> sẽ tự đồng bộ toàn bộ lệnh!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.07] bg-[#0B0C0F]/80 px-3 py-2">
+            <span className="text-xs text-zinc-500">Webhook URL:</span>
+            <code className="font-num flex-1 overflow-x-auto text-xs text-zinc-200">
+              {batchWebhookUrl}
+            </code>
+            <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={handleCopyWebhook}>
+              {copiedWebhook ? (
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {copiedWebhook ? 'Đã chép' : 'Sao chép'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Import MT5 HTML/CSV Statement */}
       <Card>
         <CardHeader>
-          <CardTitle>Import báo cáo MT5</CardTitle>
+          <CardTitle>Import báo cáo lịch sử MT5 (.html / .csv)</CardTitle>
           <CardDescription>
-            Chọn tài khoản đích và đúng múi giờ server sàn MT5 để quy đổi chuẩn về UTC.
+            Dùng khi bạn muốn nạp toàn bộ lịch sử cũ (hỗ trợ cả UTF-16LE và UTF-8, tự bỏ qua dòng
+            Balance / Deposit / Withdrawal).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -189,7 +285,6 @@ export default function ImportPage() {
             </div>
           </div>
 
-          {/* Drag & Drop Zone */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -199,7 +294,7 @@ export default function ImportPage() {
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              'group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-9 text-center transition-all duration-150',
+              'group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-all duration-150',
               dragActive
                 ? 'border-indigo-400 bg-indigo-500/[0.08] shadow-[0_0_0_4px_rgba(99,102,241,0.12)]'
                 : file
@@ -287,12 +382,11 @@ export default function ImportPage() {
               Import hoàn tất! Đã thêm mới{' '}
               <strong className="font-num">{finalResult.insertedCount}</strong> lệnh, cập nhật{' '}
               <strong className="font-num">{finalResult.updatedCount}</strong> lệnh (bỏ qua{' '}
-              <span className="font-num">{finalResult.skippedCount}</span> dòng không phải giao
-              dịch).
+              <span className="font-num">{finalResult.skippedCount}</span> dòng nạp/rút không phải
+              giao dịch).
             </div>
           )}
 
-          {/* Dry Run Preview */}
           {preview && preview.preview && (
             <div className="space-y-3 rounded-xl border border-white/[0.08] bg-[#0B0C0F]/80 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -306,12 +400,6 @@ export default function ImportPage() {
                   {brokerTimezone} → {shortTz}
                 </span>
               </div>
-
-              {preview.warnings.length > 0 && (
-                <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                  {preview.warnings.slice(0, 5).join(' · ')}
-                </div>
-              )}
 
               <div className="max-h-72 overflow-auto rounded-lg border border-white/[0.06]">
                 <table className="w-full text-left text-xs">

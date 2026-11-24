@@ -340,7 +340,7 @@ export default function AccountsPage() {
               </div>
 
               <div className="font-num mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5 text-[11px] text-zinc-500">
-                <span>Vốn gốc {formatCurrency(acc.initialBalance, acc.currency)}</span>
+                <span>Balance {formatCurrency(acc.currentBalance, acc.currency)}</span>
                 <span>
                   {acc.brokerTimezone} · {acc.tradeCount} lệnh
                 </span>

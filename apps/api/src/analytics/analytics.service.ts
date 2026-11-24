@@ -10,7 +10,9 @@ import {
   CalendarDaySummary,
   EquityCurvePoint,
   EquityCurveResponse,
+  SessionBreakdownItem,
   TagBreakdownItem,
+  ZellaScoreSummary,
 } from '@trackdailytrade/shared';
 import { DefaultUserService } from '../common/default-user.service';
 import { formatMoney } from '../common/decimal.util';
@@ -60,6 +62,45 @@ const WEEKDAY_LABELS: Array<{ key: string; label: string; weekday: number }> = [
   { key: 'sat', label: 'Sat', weekday: 6 },
   { key: 'sun', label: 'Sun', weekday: 7 },
 ];
+
+const TRADING_SESSIONS: Array<{
+  key: 'tokyo' | 'london' | 'new_york';
+  label: string;
+  utcStart: number;
+  utcEnd: number;
+  utcHoursLabel: string;
+  vnHoursLabel: string;
+}> = [
+  {
+    key: 'tokyo',
+    label: 'Tokyo (Phiên Á)',
+    utcStart: 0,
+    utcEnd: 8,
+    utcHoursLabel: '00:00–08:00 UTC',
+    vnHoursLabel: '07:00–15:00 VN',
+  },
+  {
+    key: 'london',
+    label: 'London (Phiên Âu)',
+    utcStart: 8,
+    utcEnd: 14,
+    utcHoursLabel: '08:00–14:00 UTC',
+    vnHoursLabel: '15:00–21:00 VN',
+  },
+  {
+    key: 'new_york',
+    label: 'New York (Phiên Mỹ)',
+    utcStart: 14,
+    utcEnd: 24,
+    utcHoursLabel: '14:00–24:00 UTC',
+    vnHoursLabel: '21:00–07:00 VN',
+  },
+];
+
+function clampScore(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
 
 @Injectable()
 export class AnalyticsService {
@@ -143,14 +184,38 @@ export class AnalyticsService {
         userId: user.id,
         ...(filter.accountId ? { id: filter.accountId } : {}),
       },
-      select: { id: true, initialBalance: true },
+      select: { id: true, initialBalance: true, currentBalance: true },
     });
 
     const accountIds = accounts.map((a) => a.id);
-    let startingEquity = accounts.reduce(
-      (sum, acc) => sum.plus(new Decimal(acc.initialBalance.toString())),
-      new Decimal(0),
+
+    // Anchor each account's base balance before synced trades:
+    // If `currentBalance` is synced from live MT5 EA, `base = currentBalance - allTimeSyncedNetPnl`
+    // so endingEquity matches live MT5 balance (never double-subtracts PnL).
+    const hasAnyLiveBalance = accounts.some(
+      (a) => a.currentBalance !== undefined && a.currentBalance !== null,
     );
+    const allTimePnlByAcc = new Map<string, Decimal>();
+
+    if (hasAnyLiveBalance && accountIds.length > 0 && typeof this.prisma.trade.groupBy === 'function') {
+      const grouped = await this.prisma.trade.groupBy({
+        by: ['accountId'],
+        where: { accountId: { in: accountIds } },
+        _sum: { netPnl: true },
+      });
+      for (const g of grouped) {
+        allTimePnlByAcc.set(g.accountId, new Decimal(g._sum.netPnl?.toString() ?? '0'));
+      }
+    }
+
+    let startingEquity = accounts.reduce((sum, acc) => {
+      if (acc.currentBalance !== undefined && acc.currentBalance !== null) {
+        const liveBal = new Decimal(acc.currentBalance.toString());
+        const allTimePnl = allTimePnlByAcc.get(acc.id) ?? new Decimal(0);
+        return sum.plus(liveBal.minus(allTimePnl));
+      }
+      return sum.plus(new Decimal(acc.initialBalance.toString()));
+    }, new Decimal(0));
 
     const fromUtc =
       overrideDateRange?.fromUtc ??
@@ -159,7 +224,6 @@ export class AnalyticsService {
       overrideDateRange?.toUtc ??
       (filter.to ? parseFilterDateToUtc(filter.to, displayTimezone, 'end') : undefined);
 
-    // Refinement #3: When filtering by `from`, add cumulative netPnl of all trades closed before `from`
     if (fromUtc && accountIds.length > 0) {
       const priorAgg = await this.prisma.trade.aggregate({
         where: {
@@ -264,6 +328,87 @@ export class AnalyticsService {
     };
   }
 
+  private computeZellaScore(params: {
+    totalTrades: number;
+    winRate: number;
+    profitFactor: number | null;
+    grossProfit: Decimal;
+    avgWin: Decimal;
+    avgLoss: Decimal;
+    maxDrawdownPct: number;
+    tradesWithRiskCount: number;
+    netPnl: Decimal;
+  }): ZellaScoreSummary {
+    if (params.totalTrades === 0) {
+      return {
+        overall: 0,
+        grade: 'Chưa đủ lệnh',
+        metrics: [
+          { key: 'winRate', label: 'Win Rate', score: 0 },
+          { key: 'profitFactor', label: 'Profit Factor', score: 0 },
+          { key: 'payoffRatio', label: 'Avg W/L', score: 0 },
+          { key: 'riskDiscipline', label: 'Kỷ luật SL', score: 0 },
+          { key: 'consistency', label: 'Ổn định', score: 0 },
+        ],
+      };
+    }
+
+    const winRateScore = clampScore((params.winRate / 65) * 100);
+
+    const pfScore =
+      params.profitFactor !== null
+        ? clampScore((params.profitFactor / 2.5) * 100)
+        : params.grossProfit.greaterThan(0)
+          ? 100
+          : 0;
+
+    const absAvgLoss = params.avgLoss.abs();
+    const payoffRatio = absAvgLoss.greaterThan(0)
+      ? params.avgWin.div(absAvgLoss).toNumber()
+      : params.avgWin.greaterThan(0)
+        ? 2.5
+        : 0;
+    const payoffScore = clampScore((payoffRatio / 2.0) * 100);
+
+    const slAdherencePct = (params.tradesWithRiskCount / params.totalTrades) * 100;
+    const ddControlScore = Math.max(0, 100 - params.maxDrawdownPct * 2.2);
+    const riskDisciplineScore = clampScore(slAdherencePct * 0.55 + ddControlScore * 0.45);
+
+    const consistencyRaw = params.netPnl.greaterThan(0)
+      ? 60 + Math.min(40, (params.profitFactor ?? 2.5) * 15) - params.maxDrawdownPct * 0.8
+      : Math.max(10, 48 - params.maxDrawdownPct * 1.2 + params.winRate * 0.25);
+    const consistencyScore = clampScore(consistencyRaw);
+
+    const overall = clampScore(
+      winRateScore * 0.2 +
+        pfScore * 0.25 +
+        payoffScore * 0.2 +
+        riskDisciplineScore * 0.2 +
+        consistencyScore * 0.15,
+    );
+
+    const grade =
+      overall >= 80
+        ? 'Xuất sắc'
+        : overall >= 65
+          ? 'Tốt'
+          : overall >= 45
+            ? 'Trung bình'
+            : 'Cần kỷ luật';
+
+    return {
+      overall,
+      grade,
+      metrics: [
+        { key: 'winRate', label: 'Win Rate', score: winRateScore },
+        { key: 'profitFactor', label: 'Profit Factor', score: pfScore },
+        { key: 'payoffRatio', label: 'Avg W/L', score: payoffScore },
+        { key: 'riskDiscipline', label: 'Kỷ luật SL', score: riskDisciplineScore },
+        { key: 'consistency', label: 'Ổn định', score: consistencyScore },
+      ],
+    };
+  }
+
   async getOverview(filter: AnalyticsFilterInput): Promise<AnalyticsOverview> {
     const { startingEquity, trades } = await this.loadFilteredContext(filter);
 
@@ -278,6 +423,7 @@ export class AnalyticsService {
     let totalHoldingSeconds = 0;
     let rSum = new Decimal(0);
     let rCount = 0;
+    let tradesWithRiskCount = 0;
 
     for (const t of trades) {
       const net = new Decimal(t.netPnl.toString());
@@ -294,6 +440,10 @@ export class AnalyticsService {
         if (net.lessThan(largestLoss)) largestLoss = net;
       } else {
         breakevenCount += 1;
+      }
+
+      if (t.stopLoss !== null || t.initialStopLoss !== null || t.rMultiple !== null) {
+        tradesWithRiskCount += 1;
       }
 
       if (t.rMultiple !== null) {
@@ -323,6 +473,18 @@ export class AnalyticsService {
 
     const equityStats = this.computeEquitySeries(startingEquity, trades);
 
+    const zellaScore = this.computeZellaScore({
+      totalTrades,
+      winRate,
+      profitFactor,
+      grossProfit,
+      avgWin,
+      avgLoss,
+      maxDrawdownPct: equityStats.maxDrawdownPct,
+      tradesWithRiskCount,
+      netPnl,
+    });
+
     return {
       totalTrades,
       winCount,
@@ -344,6 +506,7 @@ export class AnalyticsService {
       endingEquity: formatMoney(equityStats.endingEquity),
       maxDrawdownUsd: formatMoney(equityStats.maxDrawdownUsd),
       maxDrawdownPct: equityStats.maxDrawdownPct,
+      zellaScore,
     };
   }
 
@@ -423,10 +586,15 @@ export class AnalyticsService {
 
     const holdingBuckets = HOLDING_BUCKETS.map((b) => this.createAccumulator(b.key, b.label));
 
+    const sessionBuckets = new Map<string, BucketAccumulator>(
+      TRADING_SESSIONS.map((s) => [s.key, this.createAccumulator(s.key, s.label)]),
+    );
+
     const tagBuckets = new Map<string, { acc: BucketAccumulator; color: string }>();
 
     for (const t of trades) {
       const openZoned = getZonedDateTime(t.openTime, displayTimezone);
+      const utcHour = t.openTime.getUTCHours();
 
       // 1. Hour of Day (openTime in displayTimezone)
       const hourIdx = openZoned.hour;
@@ -448,7 +616,16 @@ export class AnalyticsService {
         this.pushTradeToBucket(holdingBuckets[holdIdx], t);
       }
 
-      // 4. Strategy Tags
+      // 4. Trading Session (Tokyo / London / New York based on UTC open hour)
+      const matchedSession = TRADING_SESSIONS.find(
+        (s) => utcHour >= s.utcStart && utcHour < s.utcEnd,
+      );
+      if (matchedSession) {
+        const sAcc = sessionBuckets.get(matchedSession.key);
+        if (sAcc) this.pushTradeToBucket(sAcc, t);
+      }
+
+      // 5. Strategy Tags
       for (const tt of t.tags) {
         const tag = tt.tag;
         let existing = tagBuckets.get(tag.id);
@@ -463,6 +640,12 @@ export class AnalyticsService {
       }
     }
 
+    const bySession: SessionBreakdownItem[] = TRADING_SESSIONS.map((s) => ({
+      ...this.finalizeBucket(sessionBuckets.get(s.key)!),
+      utcHoursLabel: s.utcHoursLabel,
+      vnHoursLabel: s.vnHoursLabel,
+    }));
+
     const byTag: TagBreakdownItem[] = Array.from(tagBuckets.entries())
       .map(([tagId, entry]) => ({
         ...this.finalizeBucket(entry.acc),
@@ -475,6 +658,7 @@ export class AnalyticsService {
       byHour: hourBuckets.map((b) => this.finalizeBucket(b)),
       byDayOfWeek: WEEKDAY_LABELS.map((w) => this.finalizeBucket(dayBuckets.get(w.weekday)!)),
       byHoldingDuration: holdingBuckets.map((b) => this.finalizeBucket(b)),
+      bySession,
       byTag,
     };
   }

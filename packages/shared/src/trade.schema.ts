@@ -34,6 +34,9 @@ export type UpdateTagInput = z.infer<typeof UpdateTagSchema>;
 
 export const UpdateTradeJournalSchema = z.object({
   note: z.string().max(10000).nullable().optional(),
+  preTradePlan: z.string().max(10000).nullable().optional(),
+  postTradeReview: z.string().max(10000).nullable().optional(),
+  screenshotUrl: z.string().max(2_500_000).nullable().optional(),
   tagIds: z.array(z.string().min(1)).optional(),
   initialStopLoss: NullableDecimalStringSchema.optional(),
   initialRiskAmount: NullableDecimalStringSchema.optional(),

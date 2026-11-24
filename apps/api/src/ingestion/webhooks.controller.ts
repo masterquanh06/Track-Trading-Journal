@@ -27,6 +27,8 @@ export class WebhooksController {
       broker: payload.broker,
       currency: payload.currency,
       brokerTimezone: payload.brokerTimezone,
+      accountBalance: payload.accountBalance,
+      accountEquity: payload.accountEquity,
     });
 
     const brokerTimezone = payload.brokerTimezone ?? account.brokerTimezone;
@@ -37,6 +39,8 @@ export class WebhooksController {
       source: this.mt5WebhookAdapter.source,
       skippedRows: parsed.skippedRows,
       warnings: parsed.warnings,
+      accountBalance: payload.accountBalance,
+      accountEquity: payload.accountEquity,
     });
   }
 
@@ -49,6 +53,8 @@ export class WebhooksController {
       broker: payload.broker,
       currency: payload.currency,
       brokerTimezone: payload.brokerTimezone,
+      accountBalance: payload.accountBalance,
+      accountEquity: payload.accountEquity,
     });
 
     const brokerTimezone = payload.brokerTimezone ?? account.brokerTimezone;
@@ -59,6 +65,8 @@ export class WebhooksController {
       source: this.mt5WebhookAdapter.source,
       skippedRows: parsed.skippedRows,
       warnings: parsed.warnings,
+      accountBalance: payload.accountBalance,
+      accountEquity: payload.accountEquity,
     });
   }
 }

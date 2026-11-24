@@ -12,6 +12,8 @@ export interface IngestOptions {
   skippedRows?: number;
   warnings?: string[];
   dryRun?: boolean;
+  accountBalance?: string | null;
+  accountEquity?: string | null;
 }
 
 export interface IngestSummary {
@@ -50,7 +52,6 @@ export class TradeIngestionService {
     const warnings = [...(options.warnings ?? [])];
     const skippedCount = options.skippedRows ?? 0;
 
-    // Deduplicate within the same batch by externalId (last wins)
     const dedupMap = new Map<string, NormalizedTradeInput>();
     for (const trade of trades) {
       dedupMap.set(trade.externalId, trade);
@@ -157,7 +158,7 @@ export class TradeIngestionService {
           });
           insertedCount++;
         } else {
-          // Idempotent update: NEVER overwrite user's `note`, `tags`, or manual risk (`isManualRisk`)
+          // Idempotent update: NEVER overwrite user's `note`, `preTradePlan`, `postTradeReview`, `screenshotUrl`, `tags`, or manual risk
           const updateData: Prisma.TradeUpdateInput = {
             symbol: t.symbol,
             direction: t.direction,
@@ -179,7 +180,6 @@ export class TradeIngestionService {
           };
 
           if (existing.isManualRisk) {
-            // Preserve manually set initialStopLoss/initialRiskAmount, recompute rMultiple if PnL changed
             const existingSl = existing.initialStopLoss
               ? new Decimal(existing.initialStopLoss.toString())
               : null;
@@ -199,12 +199,10 @@ export class TradeIngestionService {
               ? new Prisma.Decimal(risk.rMultiple.toFixed(4))
               : null;
           } else {
-            // If incoming payload has initial risk (e.g. EA backfill) or existing didn't have one yet
             const hasExistingRisk =
               existing.initialRiskAmount !== null || existing.initialStopLoss !== null;
             const incomingHasRisk = t.initialRiskAmount !== null || t.initialStopLoss !== null;
 
-            // Avoid overwriting EA-captured initialRiskAmount with a plain HTML import that lacks it
             const shouldPreferIncoming =
               t.initialRiskAmount !== null ||
               (!hasExistingRisk && incomingHasRisk) ||
@@ -237,6 +235,48 @@ export class TradeIngestionService {
             data: updateData,
           });
           updatedCount++;
+        }
+      }
+
+      // Sync account balance & equity:
+      // 1) If live EA provided `accountBalance` / `accountEquity`, store directly (source of truth).
+      // 2) Else if importing HTML/CSV without live EA balance, compute `initialBalance + sum(closedTrades.netPnl)`.
+      const hasLiveBalance = options.accountBalance !== undefined && options.accountBalance !== null;
+      const hasLiveEquity = options.accountEquity !== undefined && options.accountEquity !== null;
+
+      if (hasLiveBalance || hasLiveEquity) {
+        await tx.tradingAccount.update({
+          where: { id: options.accountId },
+          data: {
+            ...(hasLiveBalance
+              ? { currentBalance: new Prisma.Decimal(options.accountBalance!) }
+              : {}),
+            ...(hasLiveEquity
+              ? { currentEquity: new Prisma.Decimal(options.accountEquity!) }
+              : hasLiveBalance
+                ? { currentEquity: new Prisma.Decimal(options.accountBalance!) }
+                : {}),
+          },
+        });
+      } else if (options.source === TradeSource.MT5_IMPORT && tx.tradingAccount && tx.trade.aggregate) {
+        const account = await tx.tradingAccount.findUnique({
+          where: { id: options.accountId },
+        });
+        if (account) {
+          const agg = await tx.trade.aggregate({
+            where: { accountId: options.accountId },
+            _sum: { netPnl: true },
+          });
+          const sumPnl = new Decimal(agg._sum.netPnl?.toString() ?? '0');
+          const computed = new Decimal(account.initialBalance.toString()).plus(sumPnl);
+          const dec = new Prisma.Decimal(computed.toFixed(2));
+          await tx.tradingAccount.update({
+            where: { id: options.accountId },
+            data: {
+              currentBalance: dec,
+              currentEquity: dec,
+            },
+          });
         }
       }
     });

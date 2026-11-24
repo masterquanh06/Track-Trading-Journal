@@ -20,11 +20,12 @@ export interface AccountDto {
   accountNumber: string;
   currency: string;
   initialBalance: string;
+  currentBalance: string;
+  currentEquity: string;
   brokerTimezone: string;
   displayTimezone: string;
   tradeCount: number;
   netPnl: string;
-  currentEquity: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +64,9 @@ export interface TradeDto {
   swap: string;
   netPnl: string;
   note: string | null;
+  preTradePlan: string | null;
+  postTradeReview: string | null;
+  screenshotUrl: string | null;
   source: TradeSource;
   tags: TagDto[];
   createdAt: string;
@@ -177,7 +181,6 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Accounts
   getAccounts: () => apiFetch<AccountDto[]>('/accounts'),
   createAccount: (body: {
     name: string;
@@ -204,7 +207,6 @@ export const api = {
   deleteAccount: (id: string) =>
     apiFetch<{ deleted: boolean; id: string }>(`/accounts/${id}`, { method: 'DELETE' }),
 
-  // Tags
   getTags: () => apiFetch<TagDto[]>('/tags'),
   createTag: (body: { name: string; color: string }) =>
     apiFetch<TagDto>('/tags', { method: 'POST', body: JSON.stringify(body) }),
@@ -213,7 +215,6 @@ export const api = {
   deleteTag: (id: string) =>
     apiFetch<{ deleted: boolean; id: string }>(`/tags/${id}`, { method: 'DELETE' }),
 
-  // Trades
   getTrades: (params: GlobalFilterParams & { search?: string; page?: number; limit?: number }) =>
     apiFetch<TradesListResponse>(
       `/trades${buildQuery({
@@ -235,6 +236,9 @@ export const api = {
     id: string,
     body: {
       note?: string | null;
+      preTradePlan?: string | null;
+      postTradeReview?: string | null;
+      screenshotUrl?: string | null;
       tagIds?: string[];
       initialStopLoss?: string | null;
       initialRiskAmount?: string | null;
@@ -243,7 +247,6 @@ export const api = {
   deleteTrade: (id: string) =>
     apiFetch<{ deleted: boolean; id: string }>(`/trades/${id}`, { method: 'DELETE' }),
 
-  // Imports & Logs
   importMt5Statement: (params: {
     file: File;
     accountId: string;
@@ -263,7 +266,6 @@ export const api = {
   getSyncLogs: (accountId?: string) =>
     apiFetch<SyncLogDto[]>(`/imports/logs${buildQuery({ accountId, limit: 30 })}`),
 
-  // Analytics
   getAnalyticsOverview: (params: GlobalFilterParams) =>
     apiFetch<AnalyticsOverview>(
       `/analytics/overview${buildQuery({

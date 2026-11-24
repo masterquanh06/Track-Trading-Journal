@@ -16,6 +16,18 @@ export const AnalyticsFilterSchema = z.object({
 
 export type AnalyticsFilterInput = z.infer<typeof AnalyticsFilterSchema>;
 
+export interface ZellaRadarMetric {
+  key: string;
+  label: string;
+  score: number; // 0 - 100
+}
+
+export interface ZellaScoreSummary {
+  overall: number; // 0 - 100
+  grade: string;
+  metrics: ZellaRadarMetric[];
+}
+
 export interface AnalyticsOverview {
   totalTrades: number;
   winCount: number;
@@ -37,6 +49,7 @@ export interface AnalyticsOverview {
   endingEquity: string;
   maxDrawdownUsd: string;
   maxDrawdownPct: number;
+  zellaScore: ZellaScoreSummary;
 }
 
 export interface EquityCurvePoint {
@@ -75,6 +88,11 @@ export interface BreakdownBucket {
   avgR: number | null;
 }
 
+export interface SessionBreakdownItem extends BreakdownBucket {
+  utcHoursLabel: string;
+  vnHoursLabel: string;
+}
+
 export interface TagBreakdownItem extends BreakdownBucket {
   tagId: string;
   color: string;
@@ -84,5 +102,6 @@ export interface AnalyticsBreakdownsResponse {
   byHour: BreakdownBucket[];
   byDayOfWeek: BreakdownBucket[];
   byHoldingDuration: BreakdownBucket[];
+  bySession: SessionBreakdownItem[];
   byTag: TagBreakdownItem[];
 }

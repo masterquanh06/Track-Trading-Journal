@@ -7,6 +7,7 @@ import {
   Clock,
   Crosshair,
   Gauge,
+  Globe2,
   Scale,
   Target,
   TrendingUp,
@@ -19,6 +20,8 @@ import type {
 } from '@trackdailytrade/shared';
 import { BreakdownBarChart } from '@/components/charts/breakdown-bar-chart';
 import { EquityCurveChart } from '@/components/charts/equity-curve-chart';
+import { PnlUnderwaterChart } from '@/components/charts/pnl-underwater-chart';
+import { ZellaScoreCard } from '@/components/charts/zella-score-card';
 import { useGlobalFilters } from '@/components/layout/filter-context';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,8 +41,10 @@ import {
   getShortTimezoneLabel,
   pnlColorClass,
 } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 type BreakdownTab = 'hour' | 'day' | 'holding' | 'tag';
+type CurveMode = 'equity' | 'underwater';
 
 const ALL_VAL = '__all__';
 
@@ -50,12 +55,18 @@ const BREAKDOWN_TABS: Array<{ value: BreakdownTab; label: string }> = [
   { value: 'tag', label: 'Tag chiến lược' },
 ];
 
+const CURVE_MODES: Array<{ value: CurveMode; label: string }> = [
+  { value: 'equity', label: 'Equity Curve' },
+  { value: 'underwater', label: 'Cumulative PnL & Drawdown' },
+];
+
 export default function DashboardPage() {
   const { filters, setFilters, symbols, tags, refreshTick, activeAccountCurrency } =
     useGlobalFilters();
   const [overview, setOverview] = React.useState<AnalyticsOverview | null>(null);
   const [equityCurve, setEquityCurve] = React.useState<EquityCurveResponse | null>(null);
   const [breakdowns, setBreakdowns] = React.useState<AnalyticsBreakdownsResponse | null>(null);
+  const [curveMode, setCurveMode] = React.useState<CurveMode>('equity');
   const [activeTab, setActiveTab] = React.useState<BreakdownTab>('hour');
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -98,6 +109,16 @@ export default function DashboardPage() {
     if (overview.profitFactor !== null) return overview.profitFactor.toFixed(2);
     return Number(overview.grossProfit) > 0 ? '∞' : '0.00';
   }, [overview]);
+
+  const sessionHighlights = React.useMemo(() => {
+    const activeSessions = (breakdowns?.bySession ?? []).filter((s) => s.tradeCount > 0);
+    if (activeSessions.length === 0) return { bestKey: null, worstKey: null };
+    const sorted = [...activeSessions].sort((a, b) => Number(b.netPnl) - Number(a.netPnl));
+    const best = Number(sorted[0].netPnl) > 0 ? sorted[0].key : null;
+    const worst =
+      Number(sorted[sorted.length - 1].netPnl) < 0 ? sorted[sorted.length - 1].key : null;
+    return { bestKey: best, worstKey: worst };
+  }, [breakdowns]);
 
   const activeTagVal = filters.tagIds?.[0] || ALL_VAL;
   const activeSymbolVal = filters.symbol || ALL_VAL;
@@ -166,7 +187,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Primary KPI Row (4 equal Fintech cards) */}
+      {/* Primary KPI Row */}
       <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
           <div className="flex items-center justify-between">
@@ -283,7 +304,7 @@ export default function DashboardPage() {
                 </Badge>
               </div>
               <p className="font-num mt-1.5 text-[11.5px] text-zinc-500">
-                Từ vốn đầu kỳ {formatCurrency(overview.startingEquity, activeAccountCurrency)}
+                Vốn đầu kỳ {formatCurrency(overview.startingEquity, activeAccountCurrency)}
               </p>
             </>
           )}
@@ -355,40 +376,139 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Equity Curve */}
+      {/* Main Chart + Zella Score Radar Grid */}
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-indigo-400" />
+                {curveMode === 'equity'
+                  ? 'Equity Curve'
+                  : 'Cumulative Net PnL & Drawdown Underwater'}
+              </CardTitle>
+              <CardDescription>
+                {curveMode === 'equity'
+                  ? `Đường cong tăng trưởng vốn theo từng lệnh đóng (${shortTz})`
+                  : 'Lợi nhuận ròng tích luỹ kết hợp vùng sụt giảm tài khoản phía dưới trục $0'}
+              </CardDescription>
+            </div>
+            <SegmentedControl
+              options={CURVE_MODES}
+              value={curveMode}
+              onChange={setCurveMode}
+            />
+          </CardHeader>
+          <CardContent>
+            {curveMode === 'equity' ? (
+              <EquityCurveChart
+                startingEquity={equityCurve?.startingEquity ?? '0'}
+                points={equityCurve?.points ?? []}
+                currency={activeAccountCurrency}
+                timezone={tz}
+                loading={loading}
+              />
+            ) : (
+              <PnlUnderwaterChart
+                points={equityCurve?.points ?? []}
+                currency={activeAccountCurrency}
+                timezone={tz}
+                loading={loading}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <ZellaScoreCard zellaScore={overview?.zellaScore ?? null} loading={loading} />
+      </div>
+
+      {/* Performance by Trading Session (Tokyo / London / New York) */}
       <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-indigo-400" />
-              Equity Curve
-            </CardTitle>
-            <CardDescription>
-              Đường cong tăng trưởng vốn tích luỹ theo từng lệnh đóng ({shortTz})
-            </CardDescription>
-          </div>
-          {overview && !loading && (
-            <Badge
-              variant={Number(overview.netPnl) >= 0 ? 'profit' : 'loss'}
-              className="font-num w-fit"
-            >
-              {formatCurrency(overview.startingEquity, activeAccountCurrency)} →{' '}
-              {formatCurrency(overview.endingEquity, activeAccountCurrency)}
-            </Badge>
-          )}
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe2 className="h-4 w-4 text-indigo-400" />
+            Performance by Session (Phiên Á · Âu · Mỹ)
+          </CardTitle>
+          <CardDescription>
+            Tự động phân loại theo giờ mở lệnh UTC để nhận diện phiên sinh lời tốt nhất và phiên dễ
+            thua lỗ
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <EquityCurveChart
-            startingEquity={equityCurve?.startingEquity ?? '0'}
-            points={equityCurve?.points ?? []}
-            currency={activeAccountCurrency}
-            timezone={tz}
-            loading={loading}
-          />
+          {loading || !breakdowns ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+              <Skeleton className="h-32 w-full rounded-xl" />
+            </div>
+          ) : (
+            <div className="grid gap-3.5 md:grid-cols-3">
+              {breakdowns.bySession.map((session) => {
+                const isBest = sessionHighlights.bestKey === session.key;
+                const isWorst =
+                  sessionHighlights.worstKey === session.key &&
+                  sessionHighlights.bestKey !== session.key;
+
+                return (
+                  <div
+                    key={session.key}
+                    className={cn(
+                      'rounded-xl border p-4 transition-colors',
+                      isBest
+                        ? 'border-emerald-500/30 bg-emerald-500/[0.05]'
+                        : isWorst
+                          ? 'border-rose-500/30 bg-rose-500/[0.05]'
+                          : 'border-white/[0.08] bg-[#16181D]/60',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{session.label}</p>
+                        <p className="font-num mt-0.5 text-[11px] text-zinc-500">
+                          {session.vnHoursLabel} ({session.utcHoursLabel})
+                        </p>
+                      </div>
+                      {isBest && <Badge variant="profit">Hiệu quả nhất</Badge>}
+                      {isWorst && <Badge variant="loss">Rủi ro cao</Badge>}
+                    </div>
+
+                    <div className="mt-4 flex items-baseline justify-between">
+                      <span
+                        className={`font-num text-xl font-bold ${pnlColorClass(session.netPnl)}`}
+                      >
+                        {formatCurrency(session.netPnl, activeAccountCurrency, true)}
+                      </span>
+                      <span className="font-num text-xs text-zinc-400">
+                        {session.tradeCount} lệnh ({session.winCount}W/{session.lossCount}L)
+                      </span>
+                    </div>
+
+                    <div className="font-num mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5 text-[11px] text-zinc-400">
+                      <span>Win Rate: {session.winRate.toFixed(1)}%</span>
+                      <span>
+                        PF:{' '}
+                        {session.profitFactor !== null
+                          ? session.profitFactor.toFixed(2)
+                          : session.winCount > 0
+                            ? '∞'
+                            : '0.00'}
+                      </span>
+                      <span>
+                        Avg R:{' '}
+                        {session.avgR !== null
+                          ? `${session.avgR >= 0 ? '+' : ''}${session.avgR}R`
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Performance Breakdowns */}
+      {/* Detailed Breakdowns */}
       <Card>
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>

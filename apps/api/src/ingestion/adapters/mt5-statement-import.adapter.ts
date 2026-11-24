@@ -26,6 +26,18 @@ const SECTION_STOP_TITLES = [
   'balance:',
 ];
 
+const NON_TRADE_SYMBOLS = new Set([
+  'BALANCE',
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'CREDIT',
+  'BONUS',
+  'CHARGE',
+  'CORRECTION',
+  'COMMISSION',
+  'INTEREST',
+]);
+
 @Injectable()
 export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5StatementFileInput> {
   readonly source = TradeSource.MT5_IMPORT;
@@ -52,16 +64,11 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
     return this.parseMt5Csv(decoded, context);
   }
 
-  /**
-   * Detects UTF-16LE (default MT5 HTML report export), UTF-16BE, or UTF-8 (with/without BOM).
-   */
   decodeBuffer(buffer: Buffer): string {
     if (buffer.length >= 2) {
-      // UTF-16LE BOM: FF FE
       if (buffer[0] === 0xff && buffer[1] === 0xfe) {
         return new TextDecoder('utf-16le').decode(buffer.subarray(2));
       }
-      // UTF-16BE BOM: FE FF
       if (buffer[0] === 0xfe && buffer[1] === 0xff) {
         const swapped = Buffer.from(buffer.subarray(2));
         swapped.swap16();
@@ -69,12 +76,10 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
       }
     }
 
-    // UTF-8 BOM: EF BB BF
     if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
       return buffer.subarray(3).toString('utf-8');
     }
 
-    // Heuristic for BOM-less UTF-16LE / UTF-16BE
     const sampleLen = Math.min(buffer.length, 512);
     let oddNulls = 0;
     let evenNulls = 0;
@@ -110,12 +115,10 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
 
     if (!cleaned) return null;
 
-    // MT5 volume can appear as "0.50 / 0.50" -> take first value
     if (cleaned.includes('/')) {
       cleaned = cleaned.split('/')[0].trim();
     }
 
-    // Remove thousand spaces (e.g. "1 250.50" or "-1 020.00")
     cleaned = cleaned.replace(/\s+/g, '');
 
     if (!/^-?\d+(\.\d+)?$/.test(cleaned)) {
@@ -135,7 +138,6 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
     let skippedRows = 0;
 
     for (const row of rows) {
-      // Filter out MT5 hidden comment cells (`class="hidden"`) so column indices remain exact
       const cells = $(row)
         .children('th, td')
         .toArray()
@@ -150,7 +152,6 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
       const joinedLower = cells.join(' ').trim().toLowerCase();
       const firstCellLower = cells[0].toLowerCase();
 
-      // Detect start of "Positions" section
       if (!inPositionsSection) {
         if (cells.length <= 2 && firstCellLower === 'positions') {
           inPositionsSection = true;
@@ -160,7 +161,6 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
         continue;
       }
 
-      // Detect end of "Positions" section when next MT5 report block begins
       if (
         cells.length <= 2 &&
         SECTION_STOP_TITLES.some(
@@ -170,7 +170,6 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
         break;
       }
 
-      // Parse column headers row immediately under "Positions"
       if (!colMap) {
         const normalizedHeaders = cells.map((c) => c.toLowerCase().replace(/\s+/g, ''));
         if (
@@ -183,11 +182,11 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
         continue;
       }
 
-      // Stop if we hit a total / summary line inside Positions
       if (joinedLower.startsWith('total') || firstCellLower.startsWith('balance:')) {
         break;
       }
 
+      // Strictly ignore Balance / Deposit / Withdrawal / Credit / Bonus rows
       const typeVal = (cells[colMap.type] ?? '').toLowerCase();
       if (typeVal !== 'buy' && typeVal !== 'sell') {
         skippedRows += 1;
@@ -199,9 +198,8 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
       const openTimeStr = (cells[colMap.openTime] ?? '').trim();
       const closeTimeStr = (cells[colMap.closeTime] ?? '').trim();
 
-      if (!positionId || !symbol || !openTimeStr || !closeTimeStr) {
+      if (!positionId || !symbol || NON_TRADE_SYMBOLS.has(symbol) || !openTimeStr || !closeTimeStr) {
         skippedRows += 1;
-        warnings.push(`Skipped incomplete row for position "${positionId || 'unknown'}"`);
         continue;
       }
 
@@ -218,7 +216,15 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
         const closePrice = this.parseDecimalCell(cells[colMap.closePrice]);
         const grossPnl = this.parseDecimalCell(cells[colMap.profit]);
 
-        if (!volume || volume.lessThanOrEqualTo(0) || !openPrice || !closePrice || !grossPnl) {
+        if (
+          !volume ||
+          volume.lessThanOrEqualTo(0) ||
+          !openPrice ||
+          openPrice.lessThanOrEqualTo(0) ||
+          !closePrice ||
+          closePrice.lessThanOrEqualTo(0) ||
+          !grossPnl
+        ) {
           skippedRows += 1;
           warnings.push(`Skipped position ${positionId}: invalid numeric values`);
           continue;
@@ -358,9 +364,8 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
       const openTimeStr = pick('opentime', 'opentimeserver', 'time');
       const closeTimeStr = pick('closetime', 'closetimeserver');
 
-      if (!positionId || !symbol || !openTimeStr || !closeTimeStr) {
+      if (!positionId || !symbol || NON_TRADE_SYMBOLS.has(symbol) || !openTimeStr || !closeTimeStr) {
         skippedRows += 1;
-        warnings.push(`Skipped CSV row ${i + 2}: missing required columns`);
         continue;
       }
 
@@ -377,7 +382,15 @@ export class Mt5StatementImportAdapter implements ITradeIngestionAdapter<Mt5Stat
         const closePrice = this.parseDecimalCell(pick('closeprice', 'exitprice'));
         const grossPnl = this.parseDecimalCell(pick('profit', 'grosspnl', 'pnl'));
 
-        if (!volume || volume.lessThanOrEqualTo(0) || !openPrice || !closePrice || !grossPnl) {
+        if (
+          !volume ||
+          volume.lessThanOrEqualTo(0) ||
+          !openPrice ||
+          openPrice.lessThanOrEqualTo(0) ||
+          !closePrice ||
+          closePrice.lessThanOrEqualTo(0) ||
+          !grossPnl
+        ) {
           skippedRows += 1;
           warnings.push(`Skipped CSV row ${i + 2} (position ${positionId}): invalid numbers`);
           continue;

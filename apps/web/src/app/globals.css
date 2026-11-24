@@ -54,6 +54,11 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Hide Next.js floating dev indicator portal */
+  nextjs-portal {
+    display: none !important;
+  }
+
   /* Custom subtle scrollbars */
   ::-webkit-scrollbar {
     width: 6px;

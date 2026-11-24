@@ -58,6 +58,9 @@ export class TradesService {
       swap: formatMoney(new Decimal(trade.swap.toString())),
       netPnl: formatMoney(new Decimal(trade.netPnl.toString())),
       note: trade.note,
+      preTradePlan: trade.preTradePlan,
+      postTradeReview: trade.postTradeReview,
+      screenshotUrl: trade.screenshotUrl,
       source: trade.source,
       tags: trade.tags.map((tt) => ({
         id: tt.tag.id,
@@ -110,6 +113,8 @@ export class TradesService {
         { symbol: { contains: term, mode: 'insensitive' } },
         { externalId: { contains: term, mode: 'insensitive' } },
         { note: { contains: term, mode: 'insensitive' } },
+        { preTradePlan: { contains: term, mode: 'insensitive' } },
+        { postTradeReview: { contains: term, mode: 'insensitive' } },
       ];
     }
 
@@ -179,6 +184,15 @@ export class TradesService {
     if (input.note !== undefined) {
       updateData.note = input.note;
     }
+    if (input.preTradePlan !== undefined) {
+      updateData.preTradePlan = input.preTradePlan;
+    }
+    if (input.postTradeReview !== undefined) {
+      updateData.postTradeReview = input.postTradeReview;
+    }
+    if (input.screenshotUrl !== undefined) {
+      updateData.screenshotUrl = input.screenshotUrl;
+    }
 
     const riskEdited =
       input.initialStopLoss !== undefined || input.initialRiskAmount !== undefined;
@@ -189,8 +203,6 @@ export class TradesService {
           ? toDecimal(input.initialStopLoss)
           : toDecimal(existing.initialStopLoss?.toString());
 
-      // If user explicitly changed initialStopLoss without passing initialRiskAmount,
-      // re-derive initialRiskAmount from the new SL instead of keeping a stale amount.
       const nextInitialRisk =
         input.initialRiskAmount !== undefined
           ? toDecimal(input.initialRiskAmount)

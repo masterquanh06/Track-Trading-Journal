@@ -1,10 +1,10 @@
 //+------------------------------------------------------------------+
 //|                                              TrackDailyTrade.mq5 |
 //|                         TrackDailyTrade — MT5 Webhook Journal EA |
-//|        Partial-Close Aggregation + Initial SL Lock + Backfill    |
+//|     Live Balance/Equity + Partial-Close + Initial SL + Backfill  |
 //+------------------------------------------------------------------+
 #property copyright "TrackDailyTrade"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 //--- Input parameters
@@ -93,7 +93,6 @@ void SaveRiskCache()
    }
 
    int total = ArraySize(g_riskRecords);
-   // Keep most recent 2000 entries to prevent unbounded file growth
    int startIdx = (total > 2000) ? (total - 2000) : 0;
    for(int i = startIdx; i < total; i++)
    {
@@ -123,7 +122,6 @@ int FindRiskRecord(const long posId)
 
 //+------------------------------------------------------------------+
 //| Lock initial SL and compute 1R risk amount ONLY ONCE per posId   |
-//| Never overwrites once locked (safe when moving SL to BE/trailing)|
 //+------------------------------------------------------------------+
 void LockInitialRiskIfMissing(
    const long posId,
@@ -137,7 +135,6 @@ void LockInitialRiskIfMissing(
    if(posId <= 0 || sl <= 0.0 || volume <= 0.0 || openPrice <= 0.0)
       return;
 
-   // Already locked -> never overwrite on subsequent BE/trailing SL moves
    if(FindRiskRecord(posId) >= 0)
       return;
 
@@ -147,7 +144,6 @@ void LockInitialRiskIfMissing(
 
    if(OrderCalcProfit(orderType, symbol, volume, openPrice, sl, calcProfit))
    {
-      // Only treat as risk if SL is on the loss side of entry price
       if(calcProfit < 0.0)
          riskAmount = MathAbs(calcProfit);
    }
@@ -241,7 +237,6 @@ void CaptureAllOpenPositionsRisk()
 //+------------------------------------------------------------------+
 bool BuildClosedPositionJson(const long posId, string &outJson)
 {
-   // Partial close guard: do NOT emit until remaining volume == 0
    if(IsPositionStillOpen(posId))
       return false;
 
@@ -274,6 +269,7 @@ bool BuildClosedPositionJson(const long posId, string &outJson)
       if(dealTicket == 0)
          continue;
 
+      // Strictly ignore DEAL_TYPE_BALANCE, DEAL_TYPE_CREDIT, DEAL_TYPE_BONUS, etc.
       ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(dealTicket, DEAL_TYPE);
       if(dealType != DEAL_TYPE_BUY && dealType != DEAL_TYPE_SELL)
          continue;
@@ -336,11 +332,9 @@ bool BuildClosedPositionJson(const long posId, string &outJson)
    if(priceDigits <= 0 || priceDigits > 8)
       priceDigits = 5;
 
-   // Send exact broker server timestamps (YYYY.MM.DD HH:mm:ss) -> Backend converts via brokerTimezone
    string openTimeServer  = TimeToString(openTime, TIME_DATE | TIME_SECONDS);
    string closeTimeServer = TimeToString(closeTime, TIME_DATE | TIME_SECONDS);
 
-   // Resolve initial SL & 1R risk from persisted cache (fallback to entry deal SL if present)
    double initSl   = 0.0;
    double initRisk = 0.0;
    int riskIdx = FindRiskRecord(posId);
@@ -383,26 +377,28 @@ bool BuildClosedPositionJson(const long posId, string &outJson)
 }
 
 //+------------------------------------------------------------------+
-//| POST batch JSON array of closed positions to TrackDailyTrade API |
+//| POST batch JSON array + live accountBalance & accountEquity      |
 //+------------------------------------------------------------------+
 bool PostTradesBatch(const string &tradeJsonItems[], const int count)
 {
-   if(count <= 0)
-      return true;
-
-   string accountNumber = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
-   string broker        = EscapeJsonString(AccountInfoString(ACCOUNT_COMPANY));
-   string currency      = EscapeJsonString(AccountInfoString(ACCOUNT_CURRENCY));
+   string accountNumber  = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   string broker         = EscapeJsonString(AccountInfoString(ACCOUNT_COMPANY));
+   string currency       = EscapeJsonString(AccountInfoString(ACCOUNT_CURRENCY));
+   string accountBalance = DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
+   string accountEquity  = DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2);
 
    string tzPart = "";
    if(StringLen(InpBrokerTimezone) > 0)
       tzPart = "\"brokerTimezone\":\"" + EscapeJsonString(InpBrokerTimezone) + "\",";
 
    bool allOk = true;
+   int totalChunks = (count <= 0) ? 1 : ((count + BATCH_CHUNK_SIZE - 1) / BATCH_CHUNK_SIZE);
 
-   for(int offset = 0; offset < count; offset += BATCH_CHUNK_SIZE)
+   for(int chunk = 0; chunk < totalChunks; chunk++)
    {
-      int endIdx = MathMin(offset + BATCH_CHUNK_SIZE, count);
+      int offset = chunk * BATCH_CHUNK_SIZE;
+      int endIdx = (count <= 0) ? 0 : MathMin(offset + BATCH_CHUNK_SIZE, count);
+
       string tradesArray = "[";
       for(int i = offset; i < endIdx; i++)
       {
@@ -416,6 +412,8 @@ bool PostTradesBatch(const string &tradeJsonItems[], const int count)
          + "\"accountNumber\":\"" + accountNumber + "\","
          + "\"broker\":\"" + broker + "\","
          + "\"currency\":\"" + currency + "\","
+         + "\"accountBalance\":\"" + accountBalance + "\","
+         + "\"accountEquity\":\"" + accountEquity + "\","
          + tzPart
          + "\"trades\":" + tradesArray
          + "}";
@@ -423,7 +421,7 @@ bool PostTradesBatch(const string &tradeJsonItems[], const int count)
       uchar postData[];
       int encodedLen = StringToCharArray(payload, postData, 0, WHOLE_ARRAY, CP_UTF8);
       if(encodedLen > 0)
-         ArrayResize(postData, encodedLen - 1); // Remove trailing NUL byte for strict JSON parsers
+         ArrayResize(postData, encodedLen - 1);
 
       uchar  result[];
       string resultHeaders = "";
@@ -444,7 +442,7 @@ bool PostTradesBatch(const string &tradeJsonItems[], const int count)
       {
          int err = GetLastError();
          PrintFormat(
-            "[TrackDailyTrade] WebRequest failed (error %d). Make sure URL is allowed in Tools -> Options -> Expert Advisors: %s",
+            "[TrackDailyTrade] WebRequest failed (error %d). Allow URL in Tools -> Options -> Expert Advisors: %s",
             err,
             InpWebhookBatchUrl
          );
@@ -454,7 +452,7 @@ bool PostTradesBatch(const string &tradeJsonItems[], const int count)
       else if(statusCode >= 200 && statusCode < 300)
       {
          string body = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
-         PrintFormat("[TrackDailyTrade] Synced %d trade(s) -> HTTP %d: %s", (endIdx - offset), statusCode, body);
+         PrintFormat("[TrackDailyTrade] Synced %d trade(s) + Balance %s -> HTTP %d: %s", (endIdx - offset), accountBalance, statusCode, body);
       }
       else
       {
@@ -498,7 +496,7 @@ void SyncRecentHistory(const int days)
       return;
    }
 
-   // Pass 1: Collect unique positionIds that have OUT deals
+   // Pass 1: Collect unique positionIds ONLY from actual BUY/SELL trade deals
    long posIds[];
    ArrayResize(posIds, 0);
 
@@ -507,6 +505,11 @@ void SyncRecentHistory(const int days)
    {
       ulong dealTicket = HistoryDealGetTicket(i);
       if(dealTicket == 0)
+         continue;
+
+      // Ignore deposits/withdrawals/credits/bonuses (DEAL_TYPE_BALANCE, etc.)
+      ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+      if(dealType != DEAL_TYPE_BUY && dealType != DEAL_TYPE_SELL)
          continue;
 
       ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(dealTicket, DEAL_ENTRY);
@@ -539,13 +542,7 @@ void SyncRecentHistory(const int days)
    }
 
    int readyCount = ArraySize(tradeItems);
-   if(readyCount == 0)
-   {
-      PrintFormat("[TrackDailyTrade] Backfill (%dd): No closed positions found.", safeDays);
-      UpdateStatusLabel("Synced 0 trades (" + IntegerToString(safeDays) + "d)", clrSilver);
-      return;
-   }
-
+   // Even if readyCount == 0, still POST empty trades[] so live accountBalance & accountEquity sync!
    if(PostTradesBatch(tradeItems, readyCount))
    {
       string ts = TimeToString(TimeLocal(), TIME_MINUTES);
@@ -631,7 +628,7 @@ int OnInit()
    CreateChartControls();
 
    PrintFormat(
-      "[TrackDailyTrade] Initialized for MT5 #%I64d -> %s",
+      "[TrackDailyTrade] Initialized v1.10 for MT5 #%I64d -> %s",
       AccountInfoInteger(ACCOUNT_LOGIN),
       InpWebhookBatchUrl
    );
@@ -661,7 +658,6 @@ void OnTradeTransaction(
    const MqlTradeResult      &result
 )
 {
-   // 1. Capture initial SL on first manual SL placement/drag (when opened with SL == 0)
    if(trans.type == TRADE_TRANSACTION_POSITION)
    {
       long posId = (long)trans.position;
@@ -670,11 +666,23 @@ void OnTradeTransaction(
       return;
    }
 
-   // 2. Listen to newly added deals
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0)
    {
       if(!HistoryDealSelect(trans.deal))
          return;
+
+      // Strictly ignore balance/credit/bonus deals; sync live balance if deposit/withdrawal occurs!
+      ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+      if(dealType != DEAL_TYPE_BUY && dealType != DEAL_TYPE_SELL)
+      {
+         if(dealType == DEAL_TYPE_BALANCE || dealType == DEAL_TYPE_CREDIT || dealType == DEAL_TYPE_BONUS)
+         {
+            string emptyTrades[];
+            ArrayResize(emptyTrades, 0);
+            PostTradesBatch(emptyTrades, 0); // Refresh live accountBalance/accountEquity without creating a trade!
+         }
+         return;
+      }
 
       ENUM_DEAL_ENTRY dealEntry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
       long posId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
@@ -688,7 +696,6 @@ void OnTradeTransaction(
 
       if(dealEntry == DEAL_ENTRY_OUT || dealEntry == DEAL_ENTRY_OUT_BY || dealEntry == DEAL_ENTRY_INOUT)
       {
-         // Only sends webhook when remaining position volume == 0 (partial close safe)
          SendSingleClosedPosition(posId);
       }
    }

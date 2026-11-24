@@ -51,6 +51,8 @@ model TradingAccount {
   accountNumber   String
   currency        String    @default("USD")
   initialBalance  Decimal   @default(0) @db.Decimal(18, 2)
+  currentBalance  Decimal?  @db.Decimal(18, 2)
+  currentEquity   Decimal?  @db.Decimal(18, 2)
   brokerTimezone  String    @default("Europe/Athens")
   displayTimezone String    @default("Asia/Ho_Chi_Minh")
   webhookSecret   String?
@@ -88,6 +90,9 @@ model Trade {
   swap              Decimal        @default(0) @db.Decimal(18, 2)
   netPnl            Decimal        @db.Decimal(18, 2)
   note              String?        @db.Text
+  preTradePlan      String?        @db.Text
+  postTradeReview   String?        @db.Text
+  screenshotUrl     String?        @db.Text
   source            TradeSource
   rawPayload        Json?
   createdAt         DateTime       @default(now())
