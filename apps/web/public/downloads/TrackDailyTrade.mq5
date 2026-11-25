@@ -8,7 +8,7 @@
 #property strict
 
 //--- Input parameters
-input string InpWebhookBatchUrl = "http://127.0.0.1:3001/api/webhooks/mt5/batch"; // Backend Batch Webhook URL
+input string InpWebhookBatchUrl = "http://127.0.0.1:3005/api/webhooks/mt5/batch"; // Backend Batch Webhook URL
 input int    InpBackfillDays    = 7;                                             // Backfill closed history days
 input bool   InpSyncOnInit      = true;                                          // Auto-sync history on EA startup
 input string InpBrokerTimezone  = "";                                            // Optional broker TZ override (empty = use Web App setting)

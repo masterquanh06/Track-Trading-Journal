@@ -31,14 +31,14 @@ Expert Advisor MQL5 thuần (không phụ thuộc thư viện ngoài) đồng b�
 2. Tích chọn **Allow Algorithmic Trading**.
 3. Tích chọn **Allow WebRequest for listed URL**, sau đó thêm URL backend:
    ```text
-   http://127.0.0.1:3001
+   http://127.0.0.1:3005
    ```
    *(Lưu ý: nếu bạn chạy MT5 trên Windows VPS hoặc Parallels/VM khác máy host, hãy thay `127.0.0.1` bằng IP LAN của máy chạy API hoặc URL tunnel).*
 
 ### Bước 3: Gắn EA lên 1 Chart bất kỳ
 1. Kéo `TrackDailyTrade` từ bảng **Navigator → Expert Advisors** thả vào **1 chart bất kỳ** (chỉ cần gắn trên 1 chart duy nhất, EA tự theo dõi toàn bộ mọi cặp tiền trong tài khoản).
 2. Kiểm tra các tham số đầu vào (Inputs):
-   - `InpWebhookBatchUrl`: `http://127.0.0.1:3001/api/webhooks/mt5/batch`
+   - `InpWebhookBatchUrl`: `http://127.0.0.1:3005/api/webhooks/mt5/batch`
    - `InpBackfillDays`: `7`
    - `InpSyncOnInit`: `true`
    - `InpBrokerTimezone`: để trống (khuyến nghị) để dùng cấu hình `Broker Server Timezone` trên trang **Accounts & Tags** của web app.
@@ -48,6 +48,6 @@ Expert Advisor MQL5 thuần (không phụ thuộc thư viện ngoài) đồng b�
 ---
 
 ## Khắc phục sự cố thường gặp
-- **Error `4014` (`WebRequest` failed)**: Bạn chưa thêm `http://127.0.0.1:3001` vào danh sách `Allow WebRequest for listed URL` trong MT5 Options.
+- **Error `4014` (`WebRequest` failed)**: Bạn chưa thêm `http://127.0.0.1:3005` vào danh sách `Allow WebRequest for listed URL` trong MT5 Options.
 - **Error `5203` (Cannot connect)**: Backend API chưa chạy (`pnpm dev` hoặc `apps/api`) hoặc sai IP/Port.
 - **Lệnh bị lệch 1–2 tiếng**: Kiểm tra mục `Broker Server Timezone` của tài khoản trong trang `/accounts` trên web app (đa số sàn MT5 là `Europe/Athens` GMT+2/+3 DST).

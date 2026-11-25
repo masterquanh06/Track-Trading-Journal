@@ -10,7 +10,7 @@ import type {
 } from '@trackdailytrade/shared';
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:3001/api';
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? 'http://localhost:3005/api';
 
 export interface AccountDto {
   id: string;
