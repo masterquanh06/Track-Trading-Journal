@@ -19,7 +19,7 @@ export function SheetContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] animate-in fade-in-0" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[540px] flex-col border-l border-white/[0.1] bg-[#111216] text-zinc-100 shadow-[0_24px_80px_rgba(0,0,0,0.85)] outline-none animate-in slide-in-from-right duration-200',
+          'fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-[540px] flex-col border-l border-border-strong bg-surface text-fg shadow-float outline-none animate-in slide-in-from-right duration-200',
           className,
         )}
         {...props}
@@ -34,7 +34,7 @@ export function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDi
   return (
     <div
       className={cn(
-        'flex items-center justify-between border-b border-white/[0.08] px-6 py-4',
+        'flex items-center justify-between border-b border-border px-6 py-4',
         className,
       )}
       {...props}
@@ -48,7 +48,7 @@ export const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-base font-semibold tracking-tight text-zinc-100', className)}
+    className={cn('text-base font-semibold tracking-tight text-fg', className)}
     {...props}
   />
 ));
@@ -60,7 +60,7 @@ export const SheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('text-xs text-zinc-400', className)}
+    className={cn('text-xs text-fg-muted', className)}
     {...props}
   />
 ));
@@ -72,7 +72,7 @@ export function SheetCloseButton() {
       <button
         type="button"
         aria-label="Đóng"
-        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-[#16181D] text-zinc-400 transition-colors hover:border-white/[0.16] hover:text-white"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-elevated text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
       >
         <X className="h-4 w-4" />
       </button>

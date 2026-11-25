@@ -37,17 +37,13 @@ import {
   getShortTimezoneLabel,
   pnlColorClass,
 } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 
 type SideFilter = 'ALL' | TradeDirection;
 const ALL_VAL = '__all__';
 
-const SIDE_OPTIONS: Array<{ value: SideFilter; label: string }> = [
-  { value: 'ALL', label: 'Tất cả' },
-  { value: 'BUY', label: 'BUY' },
-  { value: 'SELL', label: 'SELL' },
-];
-
 export default function TradesPage() {
+  const { t } = usePreferences();
   const {
     accounts,
     filters,
@@ -73,7 +69,15 @@ export default function TradesPage() {
   const tz = filters.timezone ?? 'Asia/Ho_Chi_Minh';
   const shortTz = getShortTimezoneLabel(tz);
 
-  // Keyboard shortcut `/` focuses the search input
+  const sideOptions = React.useMemo<Array<{ value: SideFilter; label: string }>>(
+    () => [
+      { value: 'ALL', label: t.common.all },
+      { value: 'BUY', label: 'BUY' },
+      { value: 'SELL', label: 'SELL' },
+    ],
+    [t.common.all],
+  );
+
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -129,19 +133,22 @@ export default function TradesPage() {
   }, [loadData, refreshTick]);
 
   const handleUpdated = (updated: TradeDto) => {
-    setTrades((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setTrades((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
     setSelectedTrade(updated);
     void api.getAnalyticsOverview(effectiveFilters).then(setSummary).catch(() => {});
   };
 
   const handleDeleted = (tradeId: string) => {
-    setTrades((prev) => prev.filter((t) => t.id !== tradeId));
+    setTrades((prev) => prev.filter((item) => item.id !== tradeId));
     setTotal((prev) => Math.max(0, prev - 1));
     void api.getAnalyticsOverview(effectiveFilters).then(setSummary).catch(() => {});
   };
 
   const hasLocalFilters = Boolean(
-    search.trim() || filters.symbol || (filters.tagIds && filters.tagIds.length > 0) || side !== 'ALL',
+    search.trim() ||
+      filters.symbol ||
+      (filters.tagIds && filters.tagIds.length > 0) ||
+      side !== 'ALL',
   );
 
   const clearLocalFilters = () => {
@@ -152,55 +159,49 @@ export default function TradesPage() {
 
   return (
     <div className="space-y-4">
-      {/* Page Title */}
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-white">Nhật ký giao dịch</h1>
-        <p className="mt-0.5 text-xs text-zinc-400">
-          Nhấn vào từng lệnh để gắn Tag chiến lược, ghi chú phân tích và cập nhật Initial SL /
-          R-Multiple.
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight text-fg">{t.trades.title}</h1>
+        <p className="mt-0.5 text-xs text-fg-muted">{t.trades.subtitle}</p>
       </div>
 
       {/* Single-row Fintech Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.08] bg-[#111216] p-2.5 lg:flex-nowrap">
-        {/* Search with `/` shortcut hint */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-2.5 shadow-card lg:flex-nowrap">
         <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-fg-muted" />
           <Input
             ref={searchInputRef}
             className="h-8 pl-8 pr-10 text-xs"
-            placeholder="Tìm symbol, position ID, ghi chú..."
+            placeholder={t.trades.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           {search ? (
             <button
               type="button"
-              aria-label="Xoá từ khoá"
+              aria-label={t.common.reset}
               onClick={() => setSearch('')}
-              className="absolute right-2 top-1.5 rounded p-0.5 text-zinc-500 hover:text-zinc-200"
+              className="absolute right-2 top-1.5 rounded p-0.5 text-fg-muted hover:text-fg"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           ) : (
-            <kbd className="font-num pointer-events-none absolute right-2 top-1.5 hidden rounded border border-white/[0.1] bg-[#111216] px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline-block">
+            <kbd className="font-num pointer-events-none absolute right-2 top-1.5 hidden rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-fg-muted sm:inline-block">
               /
             </kbd>
           )}
         </div>
 
-        {/* Symbol Filter */}
         <Select
           value={filters.symbol || ALL_VAL}
           onValueChange={(v) =>
             setFilters((prev) => ({ ...prev, symbol: v === ALL_VAL ? '' : v }))
           }
         >
-          <SelectTrigger className="h-8 w-[140px] shrink-0">
+          <SelectTrigger className="h-8 w-[145px] shrink-0">
             <SelectValue placeholder="Symbol" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VAL}>Tất cả Symbol</SelectItem>
+            <SelectItem value={ALL_VAL}>{t.common.allSymbols}</SelectItem>
             {symbols.map((s) => (
               <SelectItem key={s} value={s}>
                 <span className="font-num">{s}</span>
@@ -209,7 +210,6 @@ export default function TradesPage() {
           </SelectContent>
         </Select>
 
-        {/* Strategy Tag Filter */}
         <Select
           value={filters.tagIds?.[0] || ALL_VAL}
           onValueChange={(v) =>
@@ -217,27 +217,26 @@ export default function TradesPage() {
           }
         >
           <SelectTrigger className="h-8 w-[165px] shrink-0">
-            <SelectValue placeholder="Tag chiến lược" />
+            <SelectValue placeholder={t.common.allTags} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_VAL}>Tất cả Tag</SelectItem>
-            {tags.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
+            <SelectItem value={ALL_VAL}>{t.common.allTags}</SelectItem>
+            {tags.map((tag) => (
+              <SelectItem key={tag.id} value={tag.id}>
                 <span className="flex items-center gap-2">
                   <span
                     className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: t.color }}
+                    style={{ backgroundColor: tag.color }}
                   />
-                  {t.name}
+                  {tag.name}
                 </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {/* Side Segmented Control */}
         <SegmentedControl
-          options={SIDE_OPTIONS}
+          options={sideOptions}
           value={side}
           onChange={setSide}
           className="shrink-0"
@@ -247,26 +246,26 @@ export default function TradesPage() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 shrink-0 px-2.5 text-xs text-zinc-400"
+            className="h-8 shrink-0 px-2.5 text-xs"
             onClick={clearLocalFilters}
           >
             <X className="h-3.5 w-3.5" />
-            Đặt lại
+            {t.common.reset}
           </Button>
         )}
       </div>
 
       {/* Summary Strip */}
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.08] bg-[#111216] px-4 py-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-surface px-4 py-3 shadow-card sm:grid-cols-4">
         <div>
-          <p className="text-[11px] text-zinc-500">Số lệnh</p>
+          <p className="text-[11px] text-fg-muted">{t.dashboard.colTrades}</p>
           {loading ? (
             <Skeleton className="mt-1 h-5 w-16" />
           ) : (
-            <p className="font-num mt-0.5 text-sm font-semibold text-white">
+            <p className="font-num mt-0.5 text-sm font-semibold text-fg">
               {total}
               {summary ? (
-                <span className="ml-1.5 text-[11px] font-normal text-zinc-500">
+                <span className="ml-1.5 text-[11px] font-normal text-fg-muted">
                   ({summary.winCount}W/{summary.lossCount}L)
                 </span>
               ) : null}
@@ -274,7 +273,7 @@ export default function TradesPage() {
           )}
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Net PnL</p>
+          <p className="text-[11px] text-fg-muted">Net PnL</p>
           {loading || !summary ? (
             <Skeleton className="mt-1 h-5 w-24" />
           ) : (
@@ -284,23 +283,23 @@ export default function TradesPage() {
           )}
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Win Rate</p>
+          <p className="text-[11px] text-fg-muted">Win Rate</p>
           {loading || !summary ? (
             <Skeleton className="mt-1 h-5 w-16" />
           ) : (
-            <p className="font-num mt-0.5 text-sm font-semibold text-zinc-100">
+            <p className="font-num mt-0.5 text-sm font-semibold text-fg">
               {summary.winRate.toFixed(1)}%
             </p>
           )}
         </div>
         <div>
-          <p className="text-[11px] text-zinc-500">Avg R-Multiple</p>
+          <p className="text-[11px] text-fg-muted">Avg R-Multiple</p>
           {loading || !summary ? (
             <Skeleton className="mt-1 h-5 w-16" />
           ) : (
             <p
               className={`font-num mt-0.5 text-sm font-semibold ${
-                summary.expectancyR != null ? pnlColorClass(summary.expectancyR) : 'text-zinc-500'
+                summary.expectancyR != null ? pnlColorClass(summary.expectancyR) : 'text-fg-faint'
               }`}
             >
               {summary.expectancyR != null
@@ -315,20 +314,22 @@ export default function TradesPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[13px]">
-            <thead className="border-b border-white/[0.08] bg-[#16181D]/70 text-[11.5px] font-medium text-zinc-400">
+            <thead className="border-b border-border bg-elevated text-[11.5px] font-medium text-fg-muted">
               <tr>
-                <th className="whitespace-nowrap px-4 py-3">Thời gian đóng ({shortTz})</th>
+                <th className="whitespace-nowrap px-4 py-3">
+                  {t.trades.colCloseTime} ({shortTz})
+                </th>
                 <th className="whitespace-nowrap px-3 py-3">Symbol</th>
-                <th className="whitespace-nowrap px-3 py-3">Loại</th>
+                <th className="whitespace-nowrap px-3 py-3">{t.trades.colSide}</th>
                 <th className="whitespace-nowrap px-3 py-3 text-right">Volume</th>
                 <th className="whitespace-nowrap px-3 py-3 text-right">Entry → Exit</th>
-                <th className="whitespace-nowrap px-3 py-3 text-right">Giữ lệnh</th>
+                <th className="whitespace-nowrap px-3 py-3 text-right">{t.trades.colHold}</th>
                 <th className="whitespace-nowrap px-3 py-3 text-right">Net PnL</th>
                 <th className="whitespace-nowrap px-3 py-3 text-right">R-Multiple</th>
-                <th className="whitespace-nowrap px-4 py-3">Tag &amp; Ghi chú</th>
+                <th className="whitespace-nowrap px-4 py-3">{t.trades.colTagsNote}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
+            <tbody className="divide-y divide-border">
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
@@ -341,36 +342,32 @@ export default function TradesPage() {
                 <tr>
                   <td colSpan={9} className="px-6 py-16 text-center">
                     <div className="mx-auto flex max-w-md flex-col items-center">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.03] text-zinc-400">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border-strong bg-subtle text-fg-muted">
                         <BookOpen className="h-5 w-5" />
                       </div>
-                      <h3 className="mt-4 text-sm font-semibold text-zinc-100">
-                        {hasLocalFilters
-                          ? 'Không tìm thấy lệnh khớp bộ lọc'
-                          : 'Nhật ký giao dịch của bạn đang trống'}
+                      <h3 className="mt-4 text-sm font-semibold text-fg">
+                        {hasLocalFilters ? t.trades.emptyFilteredTitle : t.trades.emptyTitle}
                       </h3>
-                      <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
-                        {hasLocalFilters
-                          ? 'Thử điều chỉnh từ khoá tìm kiếm, khung thời gian hoặc đặt lại bộ lọc để xem toàn bộ lịch sử lệnh.'
-                          : 'Bắt đầu ghi nhật ký bằng cách tải lên báo cáo lịch sử MT5 (.html / .csv) hoặc kết nối EA Webhook để đồng bộ tự động.'}
+                      <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">
+                        {hasLocalFilters ? t.trades.emptyFilteredDesc : t.trades.emptyDesc}
                       </p>
                       <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
                         {hasLocalFilters ? (
                           <Button size="sm" variant="secondary" onClick={clearLocalFilters}>
-                            Xoá bộ lọc hiện tại
+                            {t.trades.clearCurrentFilters}
                           </Button>
                         ) : (
                           <>
                             <Link href="/import">
                               <Button size="sm">
                                 <Upload className="h-3.5 w-3.5" />
-                                Import báo cáo MT5
+                                {t.dashboard.ctaImportMt5}
                               </Button>
                             </Link>
                             <Link href="/accounts">
                               <Button size="sm" variant="secondary">
                                 <Wallet className="h-3.5 w-3.5" />
-                                Quản lý tài khoản
+                                {t.dashboard.ctaManageAccounts}
                               </Button>
                             </Link>
                           </>
@@ -384,12 +381,12 @@ export default function TradesPage() {
                   <tr
                     key={trade.id}
                     onClick={() => setSelectedTrade(trade)}
-                    className="group cursor-pointer transition-colors hover:bg-white/[0.035]"
+                    className="group cursor-pointer transition-colors hover:bg-hover"
                   >
-                    <td className="font-num whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
+                    <td className="font-num whitespace-nowrap px-4 py-3 text-xs text-fg-muted">
                       {formatDateTimeInTz(trade.closeTime, tz)}
                     </td>
-                    <td className="font-num whitespace-nowrap px-3 py-3 font-semibold text-zinc-100 group-hover:text-white">
+                    <td className="font-num whitespace-nowrap px-3 py-3 font-semibold text-fg">
                       {trade.symbol}
                     </td>
                     <td className="whitespace-nowrap px-3 py-3">
@@ -397,14 +394,14 @@ export default function TradesPage() {
                         {trade.direction}
                       </Badge>
                     </td>
-                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-zinc-300">
+                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-fg-secondary">
                       {trade.volume}
                     </td>
-                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-zinc-400">
-                      {trade.openPrice} <span className="text-zinc-600">→</span>{' '}
-                      <span className="text-zinc-200">{trade.closePrice}</span>
+                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-fg-muted">
+                      {trade.openPrice} <span className="text-fg-faint">→</span>{' '}
+                      <span className="text-fg">{trade.closePrice}</span>
                     </td>
-                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-zinc-400">
+                    <td className="font-num whitespace-nowrap px-3 py-3 text-right text-xs text-fg-muted">
                       {formatDuration(trade.holdingSeconds)}
                     </td>
                     <td
@@ -414,7 +411,7 @@ export default function TradesPage() {
                     </td>
                     <td
                       className={`font-num whitespace-nowrap px-3 py-3 text-right text-xs font-medium ${
-                        trade.rMultiple ? pnlColorClass(trade.rMultiple) : 'text-zinc-600'
+                        trade.rMultiple ? pnlColorClass(trade.rMultiple) : 'text-fg-faint'
                       }`}
                     >
                       {trade.rMultiple
@@ -426,7 +423,7 @@ export default function TradesPage() {
                         {trade.tags.map((tag) => (
                           <span
                             key={tag.id}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#16181D] px-2 py-0.5 text-[11px] text-zinc-200"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2 py-0.5 text-[11px] text-fg-secondary"
                           >
                             <span
                               className="h-1.5 w-1.5 rounded-full"
@@ -437,15 +434,15 @@ export default function TradesPage() {
                         ))}
                         {trade.screenshotUrl && (
                           <span
-                            className="inline-flex h-5 w-5 items-center justify-center rounded bg-indigo-500/15 text-indigo-300"
-                            title="Đã đính kèm ảnh biểu đồ"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded bg-[var(--accent-bg)] text-[var(--accent-fg)]"
+                            title={t.trades.attachedChart}
                           >
                             <Camera className="h-3 w-3" />
                           </span>
                         )}
                         {(trade.note || trade.preTradePlan || trade.postTradeReview) && (
                           <span
-                            className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/[0.05] text-zinc-400"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded bg-hover text-fg-muted"
                             title={trade.note ?? trade.preTradePlan ?? trade.postTradeReview ?? ''}
                           >
                             <FileText className="h-3 w-3" />
@@ -461,10 +458,11 @@ export default function TradesPage() {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex items-center justify-between border-t border-white/[0.08] bg-[#0B0C0F]/50 px-4 py-2.5 text-xs text-zinc-400">
+        <div className="flex items-center justify-between border-t border-border bg-subtle px-4 py-2.5 text-xs text-fg-muted">
           <span className="font-num">
-            Hiển thị <strong className="text-zinc-100">{trades.length}</strong> /{' '}
-            <strong className="text-zinc-100">{total}</strong> lệnh · Trang {page} / {totalPages}
+            {t.common.showing} <strong className="text-fg">{trades.length}</strong> /{' '}
+            <strong className="text-fg">{total}</strong> {t.common.tradesCount} · {t.common.page}{' '}
+            {page} / {totalPages}
           </span>
           <div className="flex items-center gap-1.5">
             <Button
@@ -474,7 +472,7 @@ export default function TradesPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Trước
+              {t.common.prev}
             </Button>
             <Button
               size="sm"
@@ -482,7 +480,7 @@ export default function TradesPage() {
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
-              Sau
+              {t.common.next}
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>

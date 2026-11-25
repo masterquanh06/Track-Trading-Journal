@@ -14,6 +14,7 @@ import type { EquityCurvePoint } from '@trackdailytrade/shared';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency, formatDateTimeInTz, pnlColorClass } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 
 interface EquityCurveChartProps {
   startingEquity: string;
@@ -30,6 +31,7 @@ export function EquityCurveChart({
   timezone,
   loading = false,
 }: EquityCurveChartProps) {
+  const { theme, t } = usePreferences();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [hovered, setHovered] = React.useState<EquityCurvePoint | null>(null);
 
@@ -37,36 +39,45 @@ export function EquityCurveChart({
     const el = containerRef.current;
     if (!el || points.length === 0) return;
 
+    const isDark = theme === 'dark';
+    const chartBg = isDark ? '#111216' : '#FFFFFF';
+    const textColor = isDark ? '#8E8E98' : '#64748B';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)';
+    const scaleBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.10)';
+    const labelBg = isDark ? '#16181D' : '#1E293B';
+    const baselineColor = isDark ? 'rgba(255, 255, 255, 0.24)' : 'rgba(15, 23, 42, 0.28)';
+
     const chart: IChartApi = createChart(el, {
       layout: {
-        background: { type: ColorType.Solid, color: '#111216' },
-        textColor: '#71717A',
+        background: { type: ColorType.Solid, color: chartBg },
+        textColor,
         fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace',
         fontSize: 11,
+        attributionLogo: false,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)', style: LineStyle.Dashed },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)', style: LineStyle.Dashed },
+        vertLines: { color: gridColor, style: LineStyle.Dashed },
+        horzLines: { color: gridColor, style: LineStyle.Dashed },
       },
       crosshair: {
         vertLine: {
           color: 'rgba(99, 102, 241, 0.5)',
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: '#16181D',
+          labelBackgroundColor: labelBg,
         },
         horzLine: {
           color: 'rgba(99, 102, 241, 0.5)',
           width: 1,
           style: LineStyle.Dashed,
-          labelBackgroundColor: '#16181D',
+          labelBackgroundColor: labelBg,
         },
       },
       rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: scaleBorder,
       },
       timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: scaleBorder,
         timeVisible: true,
         secondsVisible: false,
       },
@@ -80,8 +91,8 @@ export function EquityCurveChart({
 
     const series = chart.addAreaSeries({
       lineColor: isPositive ? '#10B981' : '#F43F5E',
-      topColor: isPositive ? 'rgba(16, 185, 129, 0.24)' : 'rgba(244, 63, 94, 0.24)',
-      bottomColor: isPositive ? 'rgba(16, 185, 129, 0.0)' : 'rgba(244, 63, 94, 0.0)',
+      topColor: isPositive ? 'rgba(16, 185, 129, 0.24)' : 'rgba(244, 63, 94, 0.22)',
+      bottomColor: isPositive ? 'rgba(16, 185, 129, 0.01)' : 'rgba(244, 63, 94, 0.01)',
       lineWidth: 2,
       priceFormat: {
         type: 'price',
@@ -107,11 +118,11 @@ export function EquityCurveChart({
 
     series.createPriceLine({
       price: startEq,
-      color: 'rgba(255, 255, 255, 0.22)',
+      color: baselineColor,
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
-      title: 'Khởi đầu',
+      title: t.dashboard.chartStartLine,
     });
 
     chart.timeScale().fitContent();
@@ -137,7 +148,7 @@ export function EquityCurveChart({
       resizeObserver.disconnect();
       chart.remove();
     };
-  }, [points, startingEquity]);
+  }, [points, startingEquity, theme, t.dashboard.chartStartLine]);
 
   if (loading) {
     return (
@@ -154,28 +165,23 @@ export function EquityCurveChart({
 
   if (points.length === 0) {
     return (
-      <div className="flex h-[310px] flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.1] bg-[#0B0C0F]/60 px-6 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-zinc-400">
+      <div className="flex h-[310px] flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-subtle px-6 text-center">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-fg-muted shadow-card">
           <TrendingUp className="h-5 w-5" />
         </div>
-        <p className="mt-3 text-sm font-medium text-zinc-200">
-          Chưa có dữ liệu Equity Curve trong giai đoạn này
-        </p>
-        <p className="mt-1 max-w-md text-xs text-zinc-500">
-          Nhập báo cáo lịch sử MT5 hoặc kết nối EA Webhook để tự động vẽ biểu đồ tăng trưởng vốn và
-          theo dõi Drawdown theo thời gian thực.
-        </p>
+        <p className="mt-3 text-sm font-medium text-fg">{t.dashboard.emptyEquityTitle}</p>
+        <p className="mt-1 max-w-md text-xs text-fg-muted">{t.dashboard.emptyEquityDesc}</p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           <Link href="/import">
             <Button size="sm">
               <Upload className="h-3.5 w-3.5" />
-              Import báo cáo MT5
+              {t.dashboard.ctaImportMt5}
             </Button>
           </Link>
           <Link href="/accounts">
             <Button size="sm" variant="secondary">
               <Wallet className="h-3.5 w-3.5" />
-              Quản lý tài khoản
+              {t.dashboard.ctaManageAccounts}
             </Button>
           </Link>
         </div>
@@ -187,28 +193,28 @@ export function EquityCurveChart({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-lg border border-white/[0.06] bg-[#16181D]/60 px-3.5 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-lg border border-border bg-elevated px-3.5 py-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="text-zinc-500">Thời điểm</span>
-          <span className="font-num text-zinc-200">
+          <span className="text-fg-muted">{t.dashboard.chartTime}</span>
+          <span className="font-num text-fg">
             {formatDateTimeInTz(activePoint.timestamp, timezone)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-zinc-500">Equity</span>
-          <span className="font-num font-semibold text-white">
+          <span className="text-fg-muted">Equity</span>
+          <span className="font-num font-semibold text-fg">
             {formatCurrency(activePoint.equity, currency)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-zinc-500">Lệnh</span>
+          <span className="text-fg-muted">{t.dashboard.chartTrade}</span>
           <span className={`font-num font-semibold ${pnlColorClass(activePoint.netPnl)}`}>
             {formatCurrency(activePoint.netPnl, currency, true)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-zinc-500">Drawdown</span>
-          <span className="font-num text-rose-400">
+          <span className="text-fg-muted">Drawdown</span>
+          <span className="font-num text-loss">
             -{formatCurrency(activePoint.drawdownUsd, currency)} ({activePoint.drawdownPct.toFixed(2)}%)
           </span>
         </div>

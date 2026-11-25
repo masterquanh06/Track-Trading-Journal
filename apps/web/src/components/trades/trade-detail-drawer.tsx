@@ -32,6 +32,7 @@ import {
   getShortTimezoneLabel,
   pnlColorClass,
 } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 import { cn } from '@/lib/utils';
 
 interface TradeDetailDrawerProps {
@@ -47,10 +48,6 @@ interface TradeDetailDrawerProps {
 
 const TAG_SWATCHES = ['#10B981', '#6366F1', '#8B5CF6', '#3B82F6', '#F59E0B', '#F43F5E', '#06B6D4'];
 
-/**
- * Normalizes TradingView short links (`https://www.tradingview.com/x/AbCdEfGh/`)
- * to direct snapshot images where possible, or returns original URL/dataURI.
- */
 function resolveSnapshotPreviewSrc(raw: string): string {
   const trimmed = raw.trim();
   const tvMatch = /^https?:\/\/(?:www\.)?tradingview\.com\/x\/([A-Za-z0-9]+)\/?$/i.exec(trimmed);
@@ -64,10 +61,10 @@ function resolveSnapshotPreviewSrc(raw: string): string {
 async function compressImageFileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Không thể đọc tệp ảnh'));
+    reader.onerror = () => reject(new Error('Failed to read image file'));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error('Định dạng ảnh không hợp lệ'));
+      img.onerror = () => reject(new Error('Invalid image format'));
       img.onload = () => {
         const maxWidth = 1400;
         const scale = img.width > maxWidth ? maxWidth / img.width : 1;
@@ -98,6 +95,7 @@ export function TradeDetailDrawer({
   onDeleted,
   onTagCreated,
 }: TradeDetailDrawerProps) {
+  const { t } = usePreferences();
   const [preTradePlan, setPreTradePlan] = React.useState('');
   const [postTradeReview, setPostTradeReview] = React.useState('');
   const [note, setNote] = React.useState('');
@@ -122,7 +120,7 @@ export function TradeDetailDrawer({
     setNote(trade.note ?? '');
     setScreenshotUrl(trade.screenshotUrl ?? '');
     setImgError(false);
-    setSelectedTagIds(trade.tags.map((t) => t.id));
+    setSelectedTagIds(trade.tags.map((tag) => tag.id));
     setInitialStopLoss(trade.initialStopLoss ?? '');
     setInitialRiskAmount(trade.initialRiskAmount ?? '');
     setStatusMsg(null);
@@ -171,7 +169,7 @@ export function TradeDetailDrawer({
       setScreenshotUrl(dataUrl);
       setImgError(false);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tải ảnh lên');
+      setErrorMsg(err instanceof Error ? err.message : 'Image upload error');
     }
   };
 
@@ -198,7 +196,7 @@ export function TradeDetailDrawer({
       setSelectedTagIds((prev) => [...prev, created.id]);
       setNewTagName('');
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể tạo tag mới');
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to create tag');
     } finally {
       setCreatingTag(false);
     }
@@ -236,9 +234,9 @@ export function TradeDetailDrawer({
 
       const updated = await api.updateTradeJournal(trade.id, payload);
       onUpdated(updated);
-      setStatusMsg('Đã lưu đầy đủ nhật ký & hình ảnh!');
+      setStatusMsg(t.trades.drawer.savedSuccess);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể lưu nhật ký');
+      setErrorMsg(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
@@ -246,13 +244,14 @@ export function TradeDetailDrawer({
 
   const handleDelete = async () => {
     if (!trade) return;
-    if (!window.confirm(`Xoá vĩnh viễn lệnh ${trade.symbol} (#${trade.externalId})?`)) return;
+    if (!window.confirm(`${t.trades.drawer.confirmDelete} ${trade.symbol} (#${trade.externalId})?`))
+      return;
     try {
       await api.deleteTrade(trade.id);
       onDeleted(trade.id);
       onClose();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể xoá lệnh');
+      setErrorMsg(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -268,19 +267,21 @@ export function TradeDetailDrawer({
               <SheetHeader>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <SheetTitle className="font-num text-lg font-bold tracking-tight text-white">
+                    <SheetTitle className="font-num text-lg font-bold tracking-tight text-fg">
                       {trade.symbol}
                     </SheetTitle>
                     <Badge variant={trade.direction === 'BUY' ? 'profit' : 'loss'}>
                       {trade.direction}
                     </Badge>
-                    <span className="font-num rounded bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-zinc-400">
+                    <span className="font-num rounded bg-elevated px-1.5 py-0.5 text-[11px] text-fg-muted">
                       #{trade.externalId}
                     </span>
                   </div>
                   <SheetDescription className="mt-1">
                     {trade.accountName} ·{' '}
-                    {trade.source === 'MT5_WEBHOOK' ? 'MT5 EA Realtime' : 'MT5 Statement Import'}
+                    {trade.source === 'MT5_WEBHOOK'
+                      ? t.trades.drawer.sourceWebhook
+                      : t.trades.drawer.sourceImport}
                   </SheetDescription>
                 </div>
 
@@ -291,7 +292,7 @@ export function TradeDetailDrawer({
                     variant="secondary"
                     onClick={() => setShareOpen(true)}
                   >
-                    <Share2 className="h-3.5 w-3.5 text-indigo-400" />
+                    <Share2 className="h-3.5 w-3.5 text-indigo-500" />
                     Share PNG
                   </Button>
                   <SheetCloseButton />
@@ -301,8 +302,8 @@ export function TradeDetailDrawer({
               <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
                 {/* Hero PnL & R-Multiple */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-white/[0.08] bg-[#16181D] p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                  <div className="rounded-xl border border-border bg-elevated p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">
                       Net PnL
                     </p>
                     <p
@@ -310,73 +311,77 @@ export function TradeDetailDrawer({
                     >
                       {formatCurrency(trade.netPnl, trade.accountCurrency, true)}
                     </p>
-                    <p className="font-num mt-1 text-[11px] text-zinc-500">
+                    <p className="font-num mt-1 text-[11px] text-fg-muted">
                       Gross {formatCurrency(trade.grossPnl, trade.accountCurrency, true)}
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border-white/[0.08] bg-[#16181D] p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                  <div className="rounded-xl border border-border bg-elevated p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-fg-muted">
                       R-Multiple
                     </p>
                     <p
                       className={`font-num mt-1.5 text-2xl font-bold tracking-tight ${
-                        previewR !== null ? pnlColorClass(previewR) : 'text-zinc-500'
+                        previewR !== null ? pnlColorClass(previewR) : 'text-fg-faint'
                       }`}
                     >
                       {previewR !== null
                         ? `${previewR >= 0 ? '+' : ''}${previewR.toFixed(2)}R`
                         : '—'}
                     </p>
-                    <p className="font-num mt-1 text-[11px] text-zinc-500">
-                      Giữ lệnh {formatDuration(trade.holdingSeconds)}
+                    <p className="font-num mt-1 text-[11px] text-fg-muted">
+                      {t.trades.colHold}: {formatDuration(trade.holdingSeconds)}
                     </p>
                   </div>
                 </div>
 
                 {/* 2-Column Telemetry Grid */}
                 <div className="grid grid-cols-2 gap-2.5 text-xs">
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[11px] text-zinc-500">Mở lệnh ({shortTz})</p>
-                    <p className="font-num mt-1 font-medium text-zinc-200">
+                  <div className="rounded-lg border border-border bg-subtle p-3">
+                    <p className="text-[11px] text-fg-muted">
+                      {t.trades.drawer.openLabel} ({shortTz})
+                    </p>
+                    <p className="font-num mt-1 font-medium text-fg">
                       {formatDateTimeInTz(trade.openTime, timezone)}
                     </p>
-                    <p className="font-num mt-0.5 text-[11px] text-zinc-400">
-                      Entry: <span className="text-zinc-200">{trade.openPrice}</span>
+                    <p className="font-num mt-0.5 text-[11px] text-fg-muted">
+                      Entry: <span className="text-fg">{trade.openPrice}</span>
                     </p>
                   </div>
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[11px] text-zinc-500">Đóng lệnh ({shortTz})</p>
-                    <p className="font-num mt-1 font-medium text-zinc-200">
+                  <div className="rounded-lg border border-border bg-subtle p-3">
+                    <p className="text-[11px] text-fg-muted">
+                      {t.trades.drawer.closeLabel} ({shortTz})
+                    </p>
+                    <p className="font-num mt-1 font-medium text-fg">
                       {formatDateTimeInTz(trade.closeTime, timezone)}
                     </p>
-                    <p className="font-num mt-0.5 text-[11px] text-zinc-400">
-                      Exit: <span className="text-zinc-200">{trade.closePrice}</span>
+                    <p className="font-num mt-0.5 text-[11px] text-fg-muted">
+                      Exit: <span className="text-fg">{trade.closePrice}</span>
                     </p>
                   </div>
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[11px] text-zinc-500">Volume / SL / TP cuối</p>
-                    <p className="font-num mt-1 text-zinc-200">{trade.volume} lot</p>
-                    <p className="font-num mt-0.5 text-[11px] text-zinc-400">
+                  <div className="rounded-lg border border-border bg-subtle p-3">
+                    <p className="text-[11px] text-fg-muted">{t.trades.drawer.volSlTp}</p>
+                    <p className="font-num mt-1 text-fg">{trade.volume} lot</p>
+                    <p className="font-num mt-0.5 text-[11px] text-fg-muted">
                       SL {trade.stopLoss ?? '—'} · TP {trade.takeProfit ?? '—'}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[11px] text-zinc-500">Phí &amp; Swap</p>
-                    <p className="font-num mt-1 text-zinc-200">
+                  <div className="rounded-lg border border-border bg-subtle p-3">
+                    <p className="text-[11px] text-fg-muted">{t.trades.drawer.feesSwap}</p>
+                    <p className="font-num mt-1 text-fg">
                       Comm: {formatCurrency(trade.commission, trade.accountCurrency)}
                     </p>
-                    <p className="font-num mt-0.5 text-[11px] text-zinc-400">
+                    <p className="font-num mt-0.5 text-[11px] text-fg-muted">
                       Swap: {formatCurrency(trade.swap, trade.accountCurrency)}
                     </p>
                   </div>
                 </div>
 
                 {/* TradingView Snapshot / Chart Screenshot */}
-                <div className="space-y-2.5 rounded-xl border border-white/[0.08] bg-[#16181D]/60 p-4">
+                <div className="space-y-2.5 rounded-xl border border-border bg-elevated p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-zinc-200">
-                      TradingView Snapshot / Ảnh biểu đồ
+                    <span className="text-xs font-semibold text-fg">
+                      {t.trades.drawer.snapshotTitle}
                     </span>
                     <input
                       ref={imageInputRef}
@@ -393,17 +398,17 @@ export function TradeDetailDrawer({
                       onClick={() => imageInputRef.current?.click()}
                     >
                       <ImagePlus className="h-3.5 w-3.5" />
-                      Tải ảnh / Ctrl+V
+                      {t.trades.drawer.uploadPasteBtn}
                     </Button>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Input
-                      className="h-8 text-xs"
-                      placeholder="Dán link TradingView (https://www.tradingview.com/x/...) hoặc bấm Ctrl+V dán ảnh..."
+                      className="h-8 bg-surface text-xs"
+                      placeholder={t.trades.drawer.snapshotPlaceholder}
                       value={
                         screenshotUrl.startsWith('data:image/')
-                          ? '[Ảnh chụp biểu đồ đã tải lên]'
+                          ? t.trades.drawer.uploadedBadgeText
                           : screenshotUrl
                       }
                       readOnly={screenshotUrl.startsWith('data:image/')}
@@ -417,7 +422,7 @@ export function TradeDetailDrawer({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        aria-label="Xoá ảnh"
+                        aria-label={t.common.delete}
                         onClick={() => {
                           setScreenshotUrl('');
                           setImgError(false);
@@ -429,7 +434,7 @@ export function TradeDetailDrawer({
                   </div>
 
                   {resolvedPreviewSrc && (
-                    <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-[#09090B]">
+                    <div className="overflow-hidden rounded-lg border border-border bg-canvas">
                       {!imgError ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -439,15 +444,15 @@ export function TradeDetailDrawer({
                           onError={() => setImgError(true)}
                         />
                       ) : (
-                        <div className="flex items-center justify-between p-3 text-xs text-zinc-400">
-                          <span>Liên kết biểu đồ đính kèm</span>
+                        <div className="flex items-center justify-between p-3 text-xs text-fg-muted">
+                          <span>{t.trades.drawer.attachedLink}</span>
                           <a
                             href={screenshotUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-indigo-400 hover:underline"
+                            className="inline-flex items-center gap-1 text-indigo-500 hover:underline"
                           >
-                            Mở xem trực tiếp <ExternalLink className="h-3 w-3" />
+                            {t.trades.drawer.openDirect} <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       )}
@@ -456,35 +461,35 @@ export function TradeDetailDrawer({
                 </div>
 
                 {/* Initial SL / Risk Editor */}
-                <div className="space-y-3 rounded-xl border border-white/[0.08] bg-[#16181D]/60 p-4">
+                <div className="space-y-3 rounded-xl border border-border bg-elevated p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-zinc-200">
-                      Quản trị rủi ro (Initial SL &amp; 1R)
+                    <span className="text-xs font-semibold text-fg">
+                      {t.trades.drawer.riskTitle}
                     </span>
                     {trade.isManualRisk && (
                       <Badge variant="secondary">
-                        <Lock className="h-3 w-3 text-indigo-400" />
-                        Đã khoá thủ công
+                        <Lock className="h-3 w-3 text-indigo-500" />
+                        {t.trades.drawer.manualLocked}
                       </Badge>
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] text-zinc-400">Initial Stop Loss</label>
+                      <label className="text-[11px] text-fg-muted">Initial Stop Loss</label>
                       <Input
-                        className="font-num mt-1 h-8 text-xs"
-                        placeholder="vd: 2640.50"
+                        className="font-num mt-1 h-8 bg-surface text-xs"
+                        placeholder="2640.50"
                         value={initialStopLoss}
                         onChange={(e) => setInitialStopLoss(e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-zinc-400">
-                        Rủi ro 1R ({trade.accountCurrency})
+                      <label className="text-[11px] text-fg-muted">
+                        {t.trades.drawer.risk1R} ({trade.accountCurrency})
                       </label>
                       <Input
-                        className="font-num mt-1 h-8 text-xs"
-                        placeholder="vd: 250.00"
+                        className="font-num mt-1 h-8 bg-surface text-xs"
+                        placeholder="250.00"
                         value={initialRiskAmount}
                         onChange={(e) => setInitialRiskAmount(e.target.value)}
                       />
@@ -495,9 +500,9 @@ export function TradeDetailDrawer({
                 {/* Strategy Tags */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-semibold text-zinc-200">Tag chiến lược</h3>
-                    <span className="text-[11px] text-zinc-500">
-                      Đã chọn {selectedTagIds.length}
+                    <h3 className="text-xs font-semibold text-fg">{t.trades.drawer.tagsTitle}</h3>
+                    <span className="text-[11px] text-fg-muted">
+                      {t.trades.drawer.selectedCount}: {selectedTagIds.length}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -511,8 +516,8 @@ export function TradeDetailDrawer({
                           className={cn(
                             'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all',
                             active
-                              ? 'border-indigo-500/50 bg-indigo-500/15 text-white shadow-[0_0_0_1px_rgba(99,102,241,0.2)]'
-                              : 'border-white/[0.08] bg-[#16181D] text-zinc-400 hover:border-white/[0.16] hover:text-zinc-200',
+                              ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-fg'
+                              : 'border-border bg-elevated text-fg-muted hover:border-border-strong hover:text-fg',
                           )}
                         >
                           <span
@@ -520,17 +525,17 @@ export function TradeDetailDrawer({
                             style={{ backgroundColor: tag.color }}
                           />
                           {tag.name}
-                          {active && <Check className="h-3 w-3 text-indigo-300" />}
+                          {active && <Check className="h-3 w-3 text-[var(--accent-fg)]" />}
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="rounded-lg border border-white/[0.07] bg-[#16181D]/50 p-2.5">
+                  <div className="rounded-lg border border-border bg-subtle p-2.5">
                     <div className="flex items-center gap-2">
                       <Input
-                        className="h-8 flex-1 text-xs"
-                        placeholder="Tạo nhanh tag mới (vd: BB Tier 3)..."
+                        className="h-8 flex-1 bg-surface text-xs"
+                        placeholder={t.trades.drawer.quickTagPlaceholder}
                         value={newTagName}
                         onChange={(e) => setNewTagName(e.target.value)}
                         onKeyDown={(e) => {
@@ -548,21 +553,21 @@ export function TradeDetailDrawer({
                         onClick={handleQuickCreateTag}
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        Tạo
+                        {t.trades.drawer.createBtn}
                       </Button>
                     </div>
                     <div className="mt-2 flex items-center gap-1.5">
-                      <span className="text-[11px] text-zinc-500">Màu:</span>
+                      <span className="text-[11px] text-fg-muted">{t.trades.drawer.colorLabel}</span>
                       {TAG_SWATCHES.map((c) => (
                         <button
                           key={c}
                           type="button"
-                          aria-label={`Chọn màu ${c}`}
+                          aria-label={c}
                           onClick={() => setNewTagColor(c)}
                           className={cn(
                             'h-4 w-4 rounded-full transition-transform',
                             newTagColor === c
-                              ? 'scale-110 ring-2 ring-white ring-offset-1 ring-offset-[#16181D]'
+                              ? 'scale-110 ring-2 ring-indigo-500 ring-offset-1 ring-offset-surface'
                               : 'opacity-70 hover:opacity-100',
                           )}
                           style={{ backgroundColor: c }}
@@ -575,23 +580,23 @@ export function TradeDetailDrawer({
                 {/* Structured Pre-trade Plan & Post-trade Review */}
                 <div className="grid gap-3.5 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-200">
-                      Pre-trade Plan (Kế hoạch trước lệnh)
+                    <label className="text-xs font-semibold text-fg">
+                      {t.trades.drawer.prePlanLabel}
                     </label>
                     <Textarea
                       rows={4}
-                      placeholder="Bối cảnh HTF, vùng thanh khoản, tín hiệu xác nhận vào lệnh, điểm huỷ kèo..."
+                      placeholder={t.trades.drawer.prePlanPlaceholder}
                       value={preTradePlan}
                       onChange={(e) => setPreTradePlan(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-200">
-                      Post-trade Review (Đánh giá sau lệnh)
+                    <label className="text-xs font-semibold text-fg">
+                      {t.trades.drawer.postReviewLabel}
                     </label>
                     <Textarea
                       rows={4}
-                      placeholder="Tuân thủ kỷ luật hay vào sớm/FOMO? Quản lý dời SL/chốt lời đã tối ưu chưa?"
+                      placeholder={t.trades.drawer.postReviewPlaceholder}
                       value={postTradeReview}
                       onChange={(e) => setPostTradeReview(e.target.value)}
                     />
@@ -599,41 +604,43 @@ export function TradeDetailDrawer({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-200">Ghi chú bổ sung</label>
+                  <label className="text-xs font-semibold text-fg">
+                    {t.trades.drawer.extraNoteLabel}
+                  </label>
                   <Textarea
                     rows={2}
                     className="min-h-[68px]"
-                    placeholder="Ghi chú ngắn thêm..."
+                    placeholder={t.trades.drawer.extraNotePlaceholder}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                   />
                 </div>
 
                 {statusMsg && (
-                  <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                  <div className="rounded-lg border border-[var(--profit-border)] bg-[var(--profit-bg)] px-3 py-2 text-xs text-profit">
                     {statusMsg}
                   </div>
                 )}
                 {errorMsg && (
-                  <div className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                  <div className="rounded-lg border border-[var(--loss-border)] bg-[var(--loss-bg)] px-3 py-2 text-xs text-loss">
                     {errorMsg}
                   </div>
                 )}
               </div>
 
               {/* Sticky Footer */}
-              <div className="flex items-center justify-between border-t border-white/[0.08] bg-[#0B0C0F]/80 px-6 py-3.5">
+              <div className="flex items-center justify-between border-t border-border bg-sidebar px-6 py-3.5">
                 <Button type="button" size="sm" variant="destructive" onClick={handleDelete}>
                   <Trash2 className="h-3.5 w-3.5" />
-                  Xoá lệnh
+                  {t.trades.drawer.deleteTrade}
                 </Button>
                 <div className="flex items-center gap-2">
                   <Button type="button" size="sm" variant="outline" onClick={onClose}>
-                    Đóng
+                    {t.common.close}
                   </Button>
                   <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
                     <Save className="h-3.5 w-3.5" />
-                    {saving ? 'Đang lưu...' : 'Lưu nhật ký'}
+                    {saving ? t.common.saving : t.common.save}
                   </Button>
                 </div>
               </div>

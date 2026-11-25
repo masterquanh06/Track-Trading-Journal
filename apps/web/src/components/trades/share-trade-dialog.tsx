@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import type { TradeDto } from '@/lib/api';
 import { formatCurrency, formatDateTimeInTz, formatDuration } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 
 interface ShareTradeDialogProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function ShareTradeDialog({
   accountBalance = 10000,
   timezone,
 }: ShareTradeDialogProps) {
+  const { theme, t } = usePreferences();
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [privacyMode, setPrivacyMode] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -59,28 +61,33 @@ export function ShareTradeDialog({
     canvas.width = W;
     canvas.height = H;
 
+    const isDark = theme === 'dark';
     const netNum = Number(trade.netPnl);
     const isWin = netNum >= 0;
-    const accent = isWin ? '#10B981' : '#F43F5E';
-    const accentSoft = isWin ? 'rgba(16, 185, 129, 0.16)' : 'rgba(244, 63, 94, 0.16)';
+    const accent = isWin ? (isDark ? '#10B981' : '#059669') : (isDark ? '#F43F5E' : '#E11D48');
+    const accentSoft = isWin ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.14)';
 
-    // Obsidian Background
+    // Background (supports Dark & Light theme!)
     const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#09090B');
-    bgGrad.addColorStop(0.55, '#101218');
-    bgGrad.addColorStop(1, '#09090B');
+    if (isDark) {
+      bgGrad.addColorStop(0, '#09090B');
+      bgGrad.addColorStop(0.55, '#101218');
+      bgGrad.addColorStop(1, '#09090B');
+    } else {
+      bgGrad.addColorStop(0, '#F8FAFC');
+      bgGrad.addColorStop(0.55, '#FFFFFF');
+      bgGrad.addColorStop(1, '#F1F5F9');
+    }
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Ambient Accent Glow
     const glow = ctx.createRadialGradient(W * 0.82, H * 0.25, 20, W * 0.82, H * 0.25, 440);
-    glow.addColorStop(0, isWin ? 'rgba(16, 185, 129, 0.22)' : 'rgba(244, 63, 94, 0.22)');
-    glow.addColorStop(1, 'rgba(9, 9, 11, 0)');
+    glow.addColorStop(0, isWin ? 'rgba(16, 185, 129, 0.18)' : 'rgba(244, 63, 94, 0.18)');
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle Grid Lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.035)' : 'rgba(15, 23, 42, 0.04)';
     ctx.lineWidth = 1;
     for (let x = 60; x < W; x += 60) {
       ctx.beginPath();
@@ -95,13 +102,11 @@ export function ShareTradeDialog({
       ctx.stroke();
     }
 
-    // Outer Card Frame
     drawRoundedRect(ctx, 36, 36, W - 72, H - 72, 28);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(15, 23, 42, 0.12)';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Brand Header
     drawRoundedRect(ctx, 76, 74, 44, 44, 12);
     ctx.fillStyle = '#6366F1';
     ctx.fill();
@@ -109,22 +114,20 @@ export function ShareTradeDialog({
     ctx.font = '700 22px Inter, system-ui, sans-serif';
     ctx.fillText('T', 91, 104);
 
-    ctx.fillStyle = '#F4F4F5';
+    ctx.fillStyle = isDark ? '#F4F4F5' : '#09090B';
     ctx.font = '700 24px Inter, system-ui, sans-serif';
     ctx.fillText('TrackDailyTrade', 134, 98);
-    ctx.fillStyle = '#71717A';
+    ctx.fillStyle = isDark ? '#71717A' : '#64748B';
     ctx.font = '500 15px Inter, system-ui, sans-serif';
     ctx.fillText('VERIFIED TRADING JOURNAL', 134, 118);
 
-    // Date Top Right
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#A1A1AA';
+    ctx.fillStyle = isDark ? '#A1A1AA' : '#475569';
     ctx.font = '500 18px "JetBrains Mono", monospace';
     ctx.fillText(formatDateTimeInTz(trade.closeTime, timezone), W - 76, 102);
     ctx.textAlign = 'left';
 
-    // Symbol + Direction Pill
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = isDark ? '#FFFFFF' : '#09090B';
     ctx.font = '700 54px "JetBrains Mono", monospace';
     ctx.fillText(trade.symbol, 76, 220);
 
@@ -141,37 +144,34 @@ export function ShareTradeDialog({
     ctx.font = '700 22px "JetBrains Mono", monospace';
     ctx.fillText(trade.direction, pillX + (trade.direction === 'BUY' ? 30 : 24), 211);
 
-    // Compute % Return & R-Multiple
     const baseBal = accountBalance > 0 ? accountBalance : 10000;
     const pctReturn = (netNum / baseBal) * 100;
     const pctStr = `${pctReturn >= 0 ? '+' : ''}${pctReturn.toFixed(2)}%`;
     const rVal = trade.rMultiple ? Number(trade.rMultiple) : null;
     const rStr = rVal !== null ? `${rVal >= 0 ? '+' : ''}${rVal.toFixed(2)}R` : null;
 
-    // Hero Metric
     const heroPrimary = privacyMode
       ? rStr ?? pctStr
       : formatCurrency(trade.netPnl, trade.accountCurrency, true);
 
     const heroSecondary = privacyMode
       ? rStr
-        ? `Tỷ suất lợi nhuận: ${pctStr} · Số tiền đã ẩn`
-        : 'Chế độ ẩn số dư (Privacy Mode)'
+        ? `${t.trades.share.returnPctLabel}: ${pctStr} · ${t.trades.share.hiddenMoneyNote}`
+        : t.trades.share.privacyModeNote
       : [rStr, pctStr].filter(Boolean).join('  ·  ');
 
     ctx.fillStyle = accent;
     ctx.font = '700 92px "JetBrains Mono", monospace';
     ctx.fillText(heroPrimary, 76, 355);
 
-    ctx.fillStyle = '#D4D4D8';
+    ctx.fillStyle = isDark ? '#D4D4D8' : '#334155';
     ctx.font = '600 26px "JetBrains Mono", monospace';
     ctx.fillText(heroSecondary, 76, 405);
 
-    // Bottom Telemetry Strip
     drawRoundedRect(ctx, 76, 468, W - 152, 128, 18);
-    ctx.fillStyle = 'rgba(22, 24, 29, 0.88)';
+    ctx.fillStyle = isDark ? 'rgba(22, 24, 29, 0.88)' : 'rgba(241, 245, 249, 0.92)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.10)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -188,25 +188,24 @@ export function ShareTradeDialog({
     const colWidth = (W - 152) / cols.length;
     cols.forEach((col, i) => {
       const cx = 76 + i * colWidth + 28;
-      ctx.fillStyle = '#71717A';
+      ctx.fillStyle = isDark ? '#71717A' : '#64748B';
       ctx.font = '600 14px Inter, system-ui, sans-serif';
       ctx.fillText(col.label, cx, 512);
 
-      ctx.fillStyle = '#F4F4F5';
+      ctx.fillStyle = isDark ? '#F4F4F5' : '#09090B';
       ctx.font = '600 24px "JetBrains Mono", monospace';
       ctx.fillText(col.value, cx, 554);
     });
 
-    // Tags on top-right of telemetry if present
     if (trade.tags.length > 0) {
-      const tagSummary = trade.tags.map((t) => `#${t.name}`).join('  ');
+      const tagSummary = trade.tags.map((tag) => `#${tag.name}`).join('  ');
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#818CF8';
+      ctx.fillStyle = isDark ? '#818CF8' : '#4F46E5';
       ctx.font = '600 18px Inter, system-ui, sans-serif';
       ctx.fillText(tagSummary, W - 76, 446);
       ctx.textAlign = 'left';
     }
-  }, [trade, privacyMode, accountBalance, timezone]);
+  }, [trade, privacyMode, accountBalance, timezone, theme, t.trades.share]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -242,14 +241,11 @@ export function ShareTradeDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
-        <DialogTitle>Chia sẻ thẻ kết quả lệnh (Share Trade Card)</DialogTitle>
-        <DialogDescription>
-          Xuất ảnh PNG độ phân giải cao (1200×675). Bật Privacy Mode để che số tiền thật và chỉ
-          khoe R-Multiple / % lợi nhuận.
-        </DialogDescription>
+        <DialogTitle>{t.trades.share.title}</DialogTitle>
+        <DialogDescription>{t.trades.share.desc}</DialogDescription>
 
-        <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.1] bg-[#09090B]">
-          <canvas ref={canvasRef} className="h-auto w-full block" />
+        <div className="mt-4 overflow-hidden rounded-xl border border-border bg-canvas">
+          <canvas ref={canvasRef} className="block h-auto w-full" />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -260,21 +256,21 @@ export function ShareTradeDialog({
             onClick={() => setPrivacyMode((p) => !p)}
           >
             {privacyMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            {privacyMode ? 'Đang ẩn số tiền ($)' : 'Ẩn số tiền (Privacy Mode)'}
+            {privacyMode ? t.trades.share.privacyActive : t.trades.share.privacyToggle}
           </Button>
 
           <div className="flex items-center gap-2">
             <Button type="button" size="sm" variant="secondary" onClick={handleCopyImage}>
               {copied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <Check className="h-3.5 w-3.5 text-profit" />
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
-              {copied ? 'Đã copy ảnh' : 'Copy ảnh'}
+              {copied ? t.trades.share.copiedImg : t.trades.share.copyImg}
             </Button>
             <Button type="button" size="sm" onClick={handleDownload}>
               <Download className="h-3.5 w-3.5" />
-              Tải ảnh PNG
+              {t.trades.share.downloadPng}
             </Button>
           </div>
         </div>

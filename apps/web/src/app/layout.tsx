@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/layout/app-shell';
+import { PreferencesProvider } from '@/lib/preferences-context';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,15 +9,37 @@ export const metadata: Metadata = {
     'Multi-platform Trading Journal with MT5 Auto-Sync, Deep Analytics, and Trade Replay.',
 };
 
+const THEME_INIT_SCRIPT = `
+(function() {
+  try {
+    var savedTheme = localStorage.getItem('tdt_theme');
+    var theme = (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+    var root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    root.style.colorScheme = theme;
+    var savedLocale = localStorage.getItem('tdt_locale');
+    if (savedLocale === 'en' || savedLocale === 'vi') {
+      root.lang = savedLocale;
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="dark">
-      <body className="min-h-screen bg-background font-sans text-foreground">
-        <AppShell>{children}</AppShell>
+    <html lang="vi" className="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="min-h-screen bg-canvas font-sans text-fg">
+        <PreferencesProvider>
+          <AppShell>{children}</AppShell>
+        </PreferencesProvider>
       </body>
     </html>
   );

@@ -19,7 +19,7 @@ export function DialogContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] animate-in fade-in-0" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-[94vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/[0.1] bg-[#111216] p-6 text-zinc-100 shadow-[0_24px_80px_rgba(0,0,0,0.85)] outline-none animate-in fade-in-0 zoom-in-95',
+          'fixed left-1/2 top-1/2 z-50 w-[94vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border-strong bg-surface p-6 text-fg shadow-float outline-none animate-in fade-in-0 zoom-in-95',
           className,
         )}
         {...props}
@@ -29,7 +29,7 @@ export function DialogContent({
           <button
             type="button"
             aria-label="Đóng"
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/[0.07] hover:text-white"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-hover hover:text-fg"
           >
             <X className="h-4 w-4" />
           </button>
@@ -45,7 +45,7 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-base font-semibold tracking-tight text-zinc-100', className)}
+    className={cn('text-base font-semibold tracking-tight text-fg', className)}
     {...props}
   />
 ));
@@ -57,7 +57,7 @@ export const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('mt-1 text-xs text-zinc-400', className)}
+    className={cn('mt-1 text-xs text-fg-muted', className)}
     {...props}
   />
 ));

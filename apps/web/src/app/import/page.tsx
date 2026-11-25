@@ -31,9 +31,11 @@ import {
   getShortTimezoneLabel,
   pnlColorClass,
 } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 import { cn } from '@/lib/utils';
 
 export default function ImportPage() {
+  const { t } = usePreferences();
   const { accounts, filters, refreshTick, refreshReferences } = useGlobalFilters();
   const [accountId, setAccountId] = React.useState('');
   const [brokerTimezone, setBrokerTimezone] = React.useState('Europe/Athens');
@@ -119,7 +121,7 @@ export default function ImportPage() {
       });
       setPreview(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể đọc tệp báo cáo MT5');
+      setError(err instanceof Error ? err.message : 'Preview failed');
       setPreview(null);
     } finally {
       setBusy(false);
@@ -143,7 +145,7 @@ export default function ImportPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       await Promise.all([loadLogs(), refreshReferences()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import thất bại');
+      setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setBusy(false);
     }
@@ -154,15 +156,12 @@ export default function ImportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-white">Nhập dữ liệu &amp; Đồng bộ</h1>
-        <p className="mt-0.5 text-xs text-zinc-400">
-          Đồng bộ tự động từ MetaTrader 5 bằng file EA dựng sẵn (.ex5) hoặc tải lên báo cáo lịch sử
-          (.html / .csv).
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight text-fg">{t.importPage.title}</h1>
+        <p className="mt-0.5 text-xs text-fg-muted">{t.importPage.subtitle}</p>
       </div>
 
-      {/* Quick Download MT5 EA (.ex5) — 1-Minute Setup */}
-      <Card className="border-indigo-500/25 bg-gradient-to-br from-[#131520] via-[#111216] to-[#111216]">
+      {/* Quick Download MT5 EA (.ex5) */}
+      <Card className="border-[var(--accent-border)]">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -170,27 +169,22 @@ export default function ImportPage() {
                 <Zap className="h-3 w-3" />
                 Auto-Sync Realtime · v1.10
               </Badge>
-              <span className="text-xs text-zinc-400">Không cần mở MetaEditor</span>
+              <span className="text-xs text-fg-muted">{t.importPage.noMetaEditor}</span>
             </div>
-            <CardTitle className="mt-2 text-base">
-              Tải nhanh MT5 Expert Advisor (TrackDailyTrade.ex5)
-            </CardTitle>
-            <CardDescription className="mt-1">
-              Tự động đẩy Balance/Equity thực tế + lệnh đóng theo thời gian thực và lọc sạch giao
-              dịch nạp/rút tiền.
-            </CardDescription>
+            <CardTitle className="mt-2 text-base">{t.importPage.eaTitle}</CardTitle>
+            <CardDescription className="mt-1">{t.importPage.eaDesc}</CardDescription>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <a href="/downloads/TrackDailyTrade.ex5" download="TrackDailyTrade.ex5">
               <Button size="sm">
                 <Download className="h-3.5 w-3.5" />
-                Tải TrackDailyTrade.ex5
+                {t.importPage.downloadEx5}
               </Button>
             </a>
             <a href="/downloads/TrackDailyTrade.mq5" download="TrackDailyTrade.mq5">
               <Button size="sm" variant="secondary">
-                Mã nguồn .mq5
+                {t.importPage.sourceMq5}
               </Button>
             </a>
           </div>
@@ -198,42 +192,43 @@ export default function ImportPage() {
 
         <CardContent className="space-y-3">
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-400">Bước 1 · Cho phép WebRequest</span>
-              <p className="mt-1 leading-relaxed text-zinc-400">
-                Trong MT5 vào <strong>Công cụ → Tùy chọn → Công cụ đặc biệt</strong>, tích chọn{' '}
-                <em>Cho phép algorithmic trading</em> &amp; thêm URL bên dưới.
-              </p>
+            <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-500">
+                {t.importPage.step1Title}
+              </span>
+              <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step1Desc}</p>
             </div>
-            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-400">Bước 2 · Chép file .ex5</span>
-              <p className="mt-1 leading-relaxed text-zinc-400">
-                Chọn <strong>Tập tin → Mở thư mục dữ liệu</strong>, dán file{' '}
-                <code className="text-zinc-200">TrackDailyTrade.ex5</code> vào thư mục{' '}
-                <code className="text-zinc-200">MQL5/Experts</code> rồi bấm Làm mới Navigator.
-              </p>
+            <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-500">
+                {t.importPage.step2Title}
+              </span>
+              <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step2Desc}</p>
             </div>
-            <div className="rounded-lg border border-white/[0.07] bg-[#0B0C0F]/70 p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-400">Bước 3 · Kéo vào 1 biểu đồ</span>
-              <p className="mt-1 leading-relaxed text-zinc-400">
-                Kéo <strong>TrackDailyTrade</strong> thả vào 1 biểu đồ bất kỳ và bấm OK. Nút{' '}
-                <strong className="text-zinc-200">Sync Now (7d)</strong> sẽ tự đồng bộ toàn bộ lệnh!
-              </p>
+            <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
+              <span className="font-num font-semibold text-indigo-500">
+                {t.importPage.step3Title}
+              </span>
+              <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step3Desc}</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.07] bg-[#0B0C0F]/80 px-3 py-2">
-            <span className="text-xs text-zinc-500">Webhook URL:</span>
-            <code className="font-num flex-1 overflow-x-auto text-xs text-zinc-200">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2">
+            <span className="text-xs text-fg-muted">Webhook URL:</span>
+            <code className="font-num flex-1 overflow-x-auto text-xs text-fg">
               {batchWebhookUrl}
             </code>
-            <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs" onClick={handleCopyWebhook}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2.5 text-xs"
+              onClick={handleCopyWebhook}
+            >
               {copiedWebhook ? (
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                <Check className="h-3.5 w-3.5 text-profit" />
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
-              {copiedWebhook ? 'Đã chép' : 'Sao chép'}
+              {copiedWebhook ? t.common.copied : t.common.copy}
             </Button>
           </div>
         </CardContent>
@@ -242,19 +237,18 @@ export default function ImportPage() {
       {/* Import MT5 HTML/CSV Statement */}
       <Card>
         <CardHeader>
-          <CardTitle>Import báo cáo lịch sử MT5 (.html / .csv)</CardTitle>
-          <CardDescription>
-            Dùng khi bạn muốn nạp toàn bộ lịch sử cũ (hỗ trợ cả UTF-16LE và UTF-8, tự bỏ qua dòng
-            Balance / Deposit / Withdrawal).
-          </CardDescription>
+          <CardTitle>{t.importPage.statementTitle}</CardTitle>
+          <CardDescription>{t.importPage.statementDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Tài khoản giao dịch</label>
+              <label className="text-xs font-medium text-fg-muted">
+                {t.importPage.targetAccount}
+              </label>
               <Select value={accountId} onValueChange={handleAccountChange}>
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Chọn tài khoản..." />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((acc) => (
@@ -267,8 +261,8 @@ export default function ImportPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">
-                Múi giờ server sàn (Broker Timezone)
+              <label className="text-xs font-medium text-fg-muted">
+                {t.importPage.brokerTzLabel}
               </label>
               <Select value={brokerTimezone} onValueChange={setBrokerTimezone}>
                 <SelectTrigger className="h-9">
@@ -296,10 +290,10 @@ export default function ImportPage() {
             className={cn(
               'group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-all duration-150',
               dragActive
-                ? 'border-indigo-400 bg-indigo-500/[0.08] shadow-[0_0_0_4px_rgba(99,102,241,0.12)]'
+                ? 'border-indigo-500 bg-[var(--accent-bg)]'
                 : file
-                  ? 'border-emerald-500/35 bg-emerald-500/[0.04]'
-                  : 'border-white/[0.12] bg-[#0B0C0F]/60 hover:border-white/[0.22] hover:bg-[#16181D]/60',
+                  ? 'border-[var(--profit-border)] bg-[var(--profit-bg)]'
+                  : 'border-border-strong bg-subtle hover:bg-hover',
             )}
           >
             <input
@@ -313,10 +307,10 @@ export default function ImportPage() {
               className={cn(
                 'flex h-11 w-11 items-center justify-center rounded-full border transition-colors',
                 dragActive
-                  ? 'border-indigo-400/50 bg-indigo-500/20 text-indigo-300'
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-fg)]'
                   : file
-                    ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-400'
-                    : 'border-white/[0.1] bg-white/[0.03] text-zinc-400 group-hover:text-zinc-200',
+                    ? 'border-[var(--profit-border)] bg-[var(--profit-bg)] text-profit'
+                    : 'border-border bg-surface text-fg-muted group-hover:text-fg',
               )}
             >
               <FileSpreadsheet className="h-5 w-5" />
@@ -325,35 +319,34 @@ export default function ImportPage() {
             {file ? (
               <div className="mt-3 space-y-1">
                 <div className="flex items-center justify-center gap-2">
-                  <p className="font-num text-sm font-medium text-white">{file.name}</p>
+                  <p className="font-num text-sm font-medium text-fg">{file.name}</p>
                   <button
                     type="button"
-                    aria-label="Gỡ tệp"
+                    aria-label={t.common.delete}
                     onClick={(e) => {
                       e.stopPropagation();
                       setFile(null);
                       setPreview(null);
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
-                    className="rounded p-0.5 text-zinc-400 hover:bg-white/10 hover:text-white"
+                    className="rounded p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <p className="font-num text-xs text-zinc-400">
-                  {(file.size / 1024).toFixed(1)} KB · Nhấn &ldquo;Xem trước&rdquo; để kiểm tra dữ
-                  liệu trước khi lưu
+                <p className="font-num text-xs text-fg-muted">
+                  {(file.size / 1024).toFixed(1)} KB · {t.importPage.readyToPreview}
                 </p>
               </div>
             ) : (
               <>
-                <p className="mt-3 text-sm font-medium text-zinc-200">
-                  Kéo thả tệp báo cáo MT5 vào đây, hoặc{' '}
-                  <span className="text-indigo-400 underline underline-offset-4">chọn từ máy</span>
+                <p className="mt-3 text-sm font-medium text-fg">
+                  {t.importPage.dropPrompt}{' '}
+                  <span className="text-indigo-500 underline underline-offset-4">
+                    {t.importPage.browseFiles}
+                  </span>
                 </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Hỗ trợ tệp .html / .htm (UTF-16LE mặc định của MetaTrader 5 và UTF-8) và .csv
-                </p>
+                <p className="mt-1 text-xs text-fg-muted">{t.importPage.dropHint}</p>
               </>
             )}
           </div>
@@ -361,76 +354,92 @@ export default function ImportPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <Button disabled={!file || !accountId || busy} onClick={handlePreview}>
               <Upload className="h-3.5 w-3.5" />
-              {busy ? 'Đang phân tích...' : 'Xem trước (Dry Run)'}
+              {busy ? t.importPage.analyzing : t.importPage.previewBtn}
             </Button>
             {preview && (
               <Button variant="secondary" disabled={busy} onClick={handleConfirmImport}>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                Xác nhận Import ({preview.insertedCount} mới · {preview.updatedCount} cập nhật)
+                <CheckCircle2 className="h-3.5 w-3.5 text-profit" />
+                {t.importPage.confirmImportBtn} ({preview.insertedCount} {t.importPage.newShort} ·{' '}
+                {preview.updatedCount} {t.importPage.updatedShort})
               </Button>
             )}
           </div>
 
           {error && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300">
+            <div className="rounded-lg border border-[var(--loss-border)] bg-[var(--loss-bg)] px-3.5 py-2.5 text-xs text-loss">
               {error}
             </div>
           )}
 
           {finalResult && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-xs text-emerald-300">
-              Import hoàn tất! Đã thêm mới{' '}
-              <strong className="font-num">{finalResult.insertedCount}</strong> lệnh, cập nhật{' '}
-              <strong className="font-num">{finalResult.updatedCount}</strong> lệnh (bỏ qua{' '}
-              <span className="font-num">{finalResult.skippedCount}</span> dòng nạp/rút không phải
-              giao dịch).
+            <div className="rounded-lg border border-[var(--profit-border)] bg-[var(--profit-bg)] px-3.5 py-3 text-xs text-profit">
+              {t.importPage.importDonePrefix}{' '}
+              <strong className="font-num">{finalResult.insertedCount}</strong>{' '}
+              {t.importPage.importDoneMid}{' '}
+              <strong className="font-num">{finalResult.updatedCount}</strong>{' '}
+              {t.importPage.importDoneSkip}{' '}
+              <span className="font-num">{finalResult.skippedCount}</span>{' '}
+              {t.importPage.importDoneSuffix}
             </div>
           )}
 
           {preview && preview.preview && (
-            <div className="space-y-3 rounded-xl border border-white/[0.08] bg-[#0B0C0F]/80 p-4">
+            <div className="space-y-3 rounded-xl border border-border bg-subtle p-4">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-medium text-zinc-200">
-                  Xem trước: <span className="font-num text-white">{preview.totalParsed}</span> lệnh
-                  hợp lệ (
-                  <span className="font-num text-emerald-400">+{preview.insertedCount} mới</span> ·{' '}
-                  <span className="font-num text-zinc-300">~{preview.updatedCount} cập nhật</span>)
+                <span className="font-medium text-fg">
+                  {t.importPage.previewHeader}:{' '}
+                  <span className="font-num font-semibold">{preview.totalParsed}</span>{' '}
+                  {t.importPage.validTrades} (
+                  <span className="font-num text-profit">
+                    +{preview.insertedCount} {t.importPage.newShort}
+                  </span>{' '}
+                  ·{' '}
+                  <span className="font-num text-fg-secondary">
+                    ~{preview.updatedCount} {t.importPage.updatedShort}
+                  </span>
+                  )
                 </span>
-                <span className="font-num text-zinc-500">
+                <span className="font-num text-fg-muted">
                   {brokerTimezone} → {shortTz}
                 </span>
               </div>
 
-              <div className="max-h-72 overflow-auto rounded-lg border border-white/[0.06]">
+              <div className="max-h-72 overflow-auto rounded-lg border border-border bg-surface">
                 <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 border-b border-white/[0.08] bg-[#16181D] text-[11px] text-zinc-400">
+                  <thead className="sticky top-0 border-b border-border bg-elevated text-[11px] text-fg-muted">
                     <tr>
-                      <th className="px-3 py-2">Trạng thái</th>
+                      <th className="px-3 py-2">{t.importPage.colStatus}</th>
                       <th className="px-3 py-2">Position ID</th>
                       <th className="px-3 py-2">Symbol</th>
-                      <th className="px-3 py-2">Loại</th>
+                      <th className="px-3 py-2">{t.trades.colSide}</th>
                       <th className="px-3 py-2 text-right">Volume</th>
-                      <th className="px-3 py-2">Đóng lệnh ({shortTz})</th>
+                      <th className="px-3 py-2">
+                        {t.trades.colCloseTime} ({shortTz})
+                      </th>
                       <th className="px-3 py-2 text-right">Net PnL</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/[0.05]">
+                  <tbody className="divide-y divide-border">
                     {preview.preview.slice(0, 50).map((row) => (
-                      <tr key={row.externalId} className="hover:bg-white/[0.02]">
+                      <tr key={row.externalId} className="hover:bg-hover">
                         <td className="px-3 py-2">
                           <Badge variant={row.action === 'INSERT' ? 'profit' : 'secondary'}>
-                            {row.action === 'INSERT' ? 'MỚI' : 'CẬP NHẬT'}
+                            {row.action === 'INSERT'
+                              ? t.importPage.badgeNew
+                              : t.importPage.badgeUpdate}
                           </Badge>
                         </td>
-                        <td className="font-num px-3 py-2 text-zinc-300">{row.externalId}</td>
-                        <td className="font-num px-3 py-2 font-semibold text-white">{row.symbol}</td>
+                        <td className="font-num px-3 py-2 text-fg-secondary">{row.externalId}</td>
+                        <td className="font-num px-3 py-2 font-semibold text-fg">{row.symbol}</td>
                         <td className="px-3 py-2">
                           <Badge variant={row.direction === 'BUY' ? 'profit' : 'loss'}>
                             {row.direction}
                           </Badge>
                         </td>
-                        <td className="font-num px-3 py-2 text-right text-zinc-300">{row.volume}</td>
-                        <td className="font-num px-3 py-2 text-zinc-400">
+                        <td className="font-num px-3 py-2 text-right text-fg-secondary">
+                          {row.volume}
+                        </td>
+                        <td className="font-num px-3 py-2 text-fg-muted">
                           {formatDateTimeInTz(row.closeTime, tz)}
                         </td>
                         <td
@@ -452,42 +461,42 @@ export default function ImportPage() {
       <Card className="overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Lịch sử đồng bộ</CardTitle>
-            <CardDescription>
-              Nhật ký mọi phiên đồng bộ từ MT5 EA Webhook và Import báo cáo
-            </CardDescription>
+            <CardTitle>{t.importPage.logsTitle}</CardTitle>
+            <CardDescription>{t.importPage.logsDesc}</CardDescription>
           </div>
           <Button size="sm" variant="secondary" onClick={() => void loadLogs()}>
             <RefreshCw className="h-3.5 w-3.5" />
-            Làm mới
+            {t.importPage.refreshBtn}
           </Button>
         </CardHeader>
-        <div className="overflow-x-auto border-t border-white/[0.08]">
+        <div className="overflow-x-auto border-t border-border">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-white/[0.08] bg-[#16181D]/70 text-[11px] font-medium text-zinc-400">
+            <thead className="border-b border-border bg-elevated text-[11px] font-medium text-fg-muted">
               <tr>
-                <th className="px-4 py-2.5">Thời gian ({shortTz})</th>
-                <th className="px-3 py-2.5">Tài khoản</th>
-                <th className="px-3 py-2.5">Nguồn</th>
-                <th className="px-3 py-2.5">Trạng thái</th>
-                <th className="px-3 py-2.5">Tệp báo cáo</th>
-                <th className="px-4 py-2.5 text-right">Mới / Cập nhật / Bỏ qua</th>
+                <th className="px-4 py-2.5">
+                  {t.importPage.colTime} ({shortTz})
+                </th>
+                <th className="px-3 py-2.5">{t.importPage.colAccount}</th>
+                <th className="px-3 py-2.5">{t.importPage.colSource}</th>
+                <th className="px-3 py-2.5">{t.importPage.colStatus}</th>
+                <th className="px-3 py-2.5">{t.importPage.colFile}</th>
+                <th className="px-4 py-2.5 text-right">{t.importPage.colCounts}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
+            <tbody className="divide-y divide-border">
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">
-                    Chưa có lịch sử đồng bộ nào.
+                  <td colSpan={6} className="px-4 py-10 text-center text-fg-muted">
+                    {t.importPage.emptyLogs}
                   </td>
                 </tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-white/[0.025]">
-                    <td className="font-num whitespace-nowrap px-4 py-2.5 text-zinc-400">
+                  <tr key={log.id} className="hover:bg-hover">
+                    <td className="font-num whitespace-nowrap px-4 py-2.5 text-fg-muted">
                       {formatDateTimeInTz(log.createdAt, tz)}
                     </td>
-                    <td className="px-3 py-2.5 font-medium text-zinc-200">
+                    <td className="px-3 py-2.5 font-medium text-fg">
                       {log.account?.name ?? log.accountId}
                     </td>
                     <td className="px-3 py-2.5">
@@ -506,19 +515,19 @@ export default function ImportPage() {
                         }
                       >
                         {log.status === 'SUCCESS'
-                          ? 'Thành công'
+                          ? t.importPage.statusSuccess
                           : log.status === 'FAILED'
-                            ? 'Thất bại'
-                            : 'Một phần'}
+                            ? t.importPage.statusFailed
+                            : t.importPage.statusPartial}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-400">{log.fileName ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-fg-muted">{log.fileName ?? '—'}</td>
                     <td className="font-num whitespace-nowrap px-4 py-2.5 text-right">
-                      <span className="text-emerald-400">+{log.insertedCount}</span>
-                      <span className="mx-1.5 text-zinc-600">/</span>
-                      <span className="text-zinc-200">~{log.updatedCount}</span>
-                      <span className="mx-1.5 text-zinc-600">/</span>
-                      <span className="text-zinc-500">{log.skippedCount}</span>
+                      <span className="text-profit">+{log.insertedCount}</span>
+                      <span className="mx-1.5 text-fg-faint">/</span>
+                      <span className="text-fg">~{log.updatedCount}</span>
+                      <span className="mx-1.5 text-fg-faint">/</span>
+                      <span className="text-fg-muted">{log.skippedCount}</span>
                     </td>
                   </tr>
                 ))

@@ -27,7 +27,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="group"
       className={cn(
-        'inline-flex items-center rounded-lg border border-white/[0.08] bg-[#111216] p-0.5',
+        'inline-flex items-center rounded-lg border border-border bg-elevated p-0.5',
         className,
       )}
     >
@@ -42,8 +42,8 @@ export function SegmentedControl<T extends string>({
               'whitespace-nowrap rounded-md font-medium transition-all duration-150',
               size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[12.5px]',
               active
-                ? 'bg-[#1F222B] text-white shadow-[0_1px_2px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)]'
-                : 'text-zinc-400 hover:text-zinc-200',
+                ? 'bg-active text-fg shadow-sm ring-1 ring-border'
+                : 'text-fg-muted hover:text-fg',
             )}
           >
             {opt.label}

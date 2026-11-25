@@ -78,9 +78,9 @@ export function formatShortDate(yyyyMmDd: string): string {
 
 export function pnlColorClass(value: string | number): string {
   const num = typeof value === 'string' ? Number(value) : value;
-  if (num > 0) return 'text-emerald-400';
-  if (num < 0) return 'text-rose-400';
-  return 'text-zinc-400';
+  if (num > 0) return 'text-profit';
+  if (num < 0) return 'text-loss';
+  return 'text-fg-muted';
 }
 
 export const BROKER_TIMEZONE_PRESETS = [

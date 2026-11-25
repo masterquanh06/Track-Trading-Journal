@@ -7,55 +7,107 @@
 @import '@fontsource/jetbrains-mono/600.css';
 @import '@fontsource/jetbrains-mono/700.css';
 
+@config '../../tailwind.config.ts';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* Light Theme Tokens */
   :root,
-  .dark {
-    --background: 240 10% 3.9%;       /* #09090B */
-    --foreground: 240 5% 96%;         /* #F4F4F5 */
-    --card: 228 14% 7.5%;             /* #111216 */
-    --card-foreground: 240 5% 96%;
-    --popover: 223 14% 10.2%;         /* #16181D */
-    --popover-foreground: 240 5% 96%;
-    --primary: 239 84% 67%;           /* #6366F1 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 223 14% 10.2%;       /* #16181D */
-    --secondary-foreground: 240 5% 92%;
-    --muted: 223 12% 13%;
-    --muted-foreground: 240 5% 60%;   /* #94949E */
-    --accent: 225 14% 14%;
-    --accent-foreground: 240 5% 96%;
-    --destructive: 350 89% 60%;       /* #F43F5E */
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 16%;
-    --input: 223 14% 10.2%;
-    --ring: 239 84% 67%;
-    --profit: 160 84% 39%;            /* #10B981 */
-    --loss: 350 89% 60%;              /* #F43F5E */
+  html.light {
+    --bg-canvas: #f6f7f9;
+    --bg-sidebar: #eff1f5;
+    --bg-topbar: rgba(246, 247, 249, 0.9);
+    --bg-surface: #ffffff;
+    --bg-elevated: #f1f3f7;
+    --bg-popover: #ffffff;
+    --bg-subtle: rgba(15, 23, 42, 0.03);
+    --bg-hover: rgba(15, 23, 42, 0.055);
+    --bg-active: #ffffff;
+
+    --border-subtle: rgba(15, 23, 42, 0.09);
+    --border-strong: rgba(15, 23, 42, 0.16);
+
+    --fg-primary: #09090b;
+    --fg-secondary: #27272a;
+    --fg-muted: #64748b;
+    --fg-faint: #94a3b8;
+
+    --profit-fg: #059669;
+    --profit-bg: rgba(16, 185, 129, 0.11);
+    --profit-border: rgba(16, 185, 129, 0.28);
+
+    --loss-fg: #e11d48;
+    --loss-bg: rgba(244, 63, 94, 0.1);
+    --loss-border: rgba(244, 63, 94, 0.26);
+
+    --accent-fg: #4f46e5;
+    --accent-bg: rgba(99, 102, 241, 0.11);
+    --accent-border: rgba(99, 102, 241, 0.28);
+
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-float: 0 16px 40px rgba(15, 23, 42, 0.14);
+
     --radius: 0.625rem;
+    color-scheme: light;
   }
 
-  * {
-    border-color: rgba(255, 255, 255, 0.08);
-  }
+  /* Dark Theme Tokens (Default Obsidian Dark) */
+  html.dark {
+    --bg-canvas: #09090b;
+    --bg-sidebar: #0b0c0f;
+    --bg-topbar: rgba(9, 9, 11, 0.88);
+    --bg-surface: #111216;
+    --bg-elevated: #16181d;
+    --bg-popover: #16181d;
+    --bg-subtle: rgba(255, 255, 255, 0.03);
+    --bg-hover: rgba(255, 255, 255, 0.05);
+    --bg-active: #1f222b;
 
-  html {
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.15);
+
+    --fg-primary: #f4f4f5;
+    --fg-secondary: #d4d4d8;
+    --fg-muted: #8e8e98;
+    --fg-faint: #63636e;
+
+    --profit-fg: #34d399;
+    --profit-bg: rgba(16, 185, 129, 0.12);
+    --profit-border: rgba(16, 185, 129, 0.24);
+
+    --loss-fg: #fb7185;
+    --loss-bg: rgba(244, 63, 94, 0.12);
+    --loss-border: rgba(244, 63, 94, 0.24);
+
+    --accent-fg: #818cf8;
+    --accent-bg: rgba(99, 102, 241, 0.14);
+    --accent-border: rgba(99, 102, 241, 0.3);
+
+    --shadow-card: none;
+    --shadow-float: 0 18px 50px rgba(0, 0, 0, 0.72);
+
     color-scheme: dark;
   }
 
+  * {
+    border-color: var(--border-subtle);
+  }
+
   body {
-    background-color: #09090b;
-    color: #f4f4f5;
+    background-color: var(--bg-canvas);
+    color: var(--fg-primary);
     font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 150ms ease, color 150ms ease;
   }
 
-  /* Hide Next.js floating dev indicator portal */
-  nextjs-portal {
+  /* Hide Next.js floating dev indicator & TradingView chart attribution badge */
+  nextjs-portal,
+  #tv-attr-logo {
     display: none !important;
   }
 
@@ -68,17 +120,112 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--border-strong);
     border-radius: 9999px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.22);
   }
 }
 
-@layer utilities {
-  .font-num {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    font-variant-numeric: tabular-nums;
-  }
+/* Explicit semantic theme bindings (ensures instant HMR even if PostCSS cached prior config) */
+.bg-canvas {
+  background-color: var(--bg-canvas);
+}
+.bg-sidebar {
+  background-color: var(--bg-sidebar);
+}
+.bg-topbar {
+  background-color: var(--bg-topbar);
+}
+.bg-surface {
+  background-color: var(--bg-surface);
+}
+.bg-elevated {
+  background-color: var(--bg-elevated);
+}
+.bg-popover {
+  background-color: var(--bg-popover);
+}
+.bg-subtle {
+  background-color: var(--bg-subtle);
+}
+.bg-hover {
+  background-color: var(--bg-hover);
+}
+.bg-active {
+  background-color: var(--bg-active);
+}
+.bg-border {
+  background-color: var(--border-subtle);
+}
+.hover\:bg-hover:hover {
+  background-color: var(--bg-hover);
+}
+.focus\:bg-hover:focus {
+  background-color: var(--bg-hover);
+}
+
+.text-fg {
+  color: var(--fg-primary);
+}
+.text-fg-secondary {
+  color: var(--fg-secondary);
+}
+.text-fg-muted {
+  color: var(--fg-muted);
+}
+.text-fg-faint {
+  color: var(--fg-faint);
+}
+.text-profit,
+.text-profit-fg {
+  color: var(--profit-fg);
+}
+.text-loss,
+.text-loss-fg {
+  color: var(--loss-fg);
+}
+.hover\:text-fg:hover {
+  color: var(--fg-primary);
+}
+.focus\:text-fg:focus {
+  color: var(--fg-primary);
+}
+.hover\:text-loss:hover {
+  color: var(--loss-fg);
+}
+.group:hover .group-hover\:text-fg {
+  color: var(--fg-primary);
+}
+.placeholder\:text-fg-faint::placeholder {
+  color: var(--fg-faint);
+}
+.data-\[state\=checked\]\:text-fg[data-state='checked'] {
+  color: var(--fg-primary);
+}
+.\[\&_button\]\:text-fg-muted button {
+  color: var(--fg-muted);
+}
+
+.border-border {
+  border-color: var(--border-subtle);
+}
+.border-border-strong {
+  border-color: var(--border-strong);
+}
+.hover\:border-border-strong:hover {
+  border-color: var(--border-strong);
+}
+.ring-border {
+  --tw-ring-color: var(--border-subtle);
+}
+
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+.shadow-float {
+  box-shadow: var(--shadow-float);
+}
+
+.font-num {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-variant-numeric: tabular-nums;
 }

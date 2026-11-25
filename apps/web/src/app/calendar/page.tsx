@@ -11,9 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { formatCurrency, getShortTimezoneLabel, pnlColorClass } from '@/lib/format';
+import { usePreferences } from '@/lib/preferences-context';
 import { cn } from '@/lib/utils';
-
-const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 function formatMonthParam(date: Date): string {
   const y = date.getFullYear();
@@ -23,6 +22,7 @@ function formatMonthParam(date: Date): string {
 
 export default function CalendarPage() {
   const router = useRouter();
+  const { locale, t } = usePreferences();
   const { filters, refreshTick, setCustomDateRange, activeAccountCurrency } = useGlobalFilters();
   const [cursor, setCursor] = React.useState(() => {
     const now = new Date();
@@ -97,7 +97,7 @@ export default function CalendarPage() {
     return grouped;
   }, [cursor]);
 
-  const monthLabel = cursor.toLocaleDateString('vi-VN', {
+  const monthLabel = cursor.toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', {
     month: 'long',
     year: 'numeric',
   });
@@ -105,16 +105,20 @@ export default function CalendarPage() {
   const getCellIntensityClass = (pnl: number) => {
     const ratio = monthStats.maxAbsPnl > 0 ? Math.abs(pnl) / monthStats.maxAbsPnl : 0;
     if (pnl > 0) {
-      if (ratio >= 0.66) return 'border-emerald-500/45 bg-emerald-500/[0.20] hover:border-emerald-400/70';
-      if (ratio >= 0.33) return 'border-emerald-500/30 bg-emerald-500/[0.13] hover:border-emerald-400/55';
-      return 'border-emerald-500/20 bg-emerald-500/[0.08] hover:border-emerald-400/40';
+      if (ratio >= 0.66)
+        return 'border-emerald-500/45 bg-emerald-500/[0.18] hover:border-emerald-500/75';
+      if (ratio >= 0.33)
+        return 'border-emerald-500/35 bg-emerald-500/[0.12] hover:border-emerald-500/60';
+      return 'border-emerald-500/25 bg-emerald-500/[0.07] hover:border-emerald-500/45';
     }
     if (pnl < 0) {
-      if (ratio >= 0.66) return 'border-rose-500/45 bg-rose-500/[0.20] hover:border-rose-400/70';
-      if (ratio >= 0.33) return 'border-rose-500/30 bg-rose-500/[0.13] hover:border-rose-400/55';
-      return 'border-rose-500/20 bg-rose-500/[0.08] hover:border-rose-400/40';
+      if (ratio >= 0.66)
+        return 'border-rose-500/45 bg-rose-500/[0.18] hover:border-rose-500/75';
+      if (ratio >= 0.33)
+        return 'border-rose-500/35 bg-rose-500/[0.12] hover:border-rose-500/60';
+      return 'border-rose-500/25 bg-rose-500/[0.07] hover:border-rose-500/45';
     }
-    return 'border-white/[0.1] bg-white/[0.04]';
+    return 'border-border bg-subtle';
   };
 
   const handleDaySelect = (dateKey: string) => {
@@ -126,10 +130,9 @@ export default function CalendarPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Calendar PnL</h1>
-          <p className="mt-0.5 text-xs text-zinc-400">
-            Bản đồ nhiệt lợi nhuận từng ngày ({shortTz}). Nhấn vào ngày có giao dịch để xem chi tiết
-            lệnh.
+          <h1 className="text-xl font-semibold tracking-tight text-fg">{t.calendar.title}</h1>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            {t.calendar.subtitle} ({shortTz})
           </p>
         </div>
 
@@ -137,7 +140,7 @@ export default function CalendarPage() {
           <Button
             size="icon"
             variant="secondary"
-            aria-label="Tháng trước"
+            aria-label={t.calendar.prevMonth}
             onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -150,12 +153,12 @@ export default function CalendarPage() {
               setCursor(new Date(now.getFullYear(), now.getMonth(), 1));
             }}
           >
-            Tháng này
+            {t.calendar.thisMonth}
           </Button>
           <Button
             size="icon"
             variant="secondary"
-            aria-label="Tháng sau"
+            aria-label={t.calendar.nextMonth}
             onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
           >
             <ChevronRight className="h-4 w-4" />
@@ -164,16 +167,20 @@ export default function CalendarPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-base capitalize text-white">{monthLabel}</CardTitle>
+        <CardHeader className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-base capitalize text-fg">{monthLabel}</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="font-num">
-              {monthStats.totalTrades} lệnh
+              {monthStats.totalTrades} {t.common.tradesCount}
             </Badge>
             <Badge variant="secondary" className="font-num">
-              <span className="text-emerald-400">{monthStats.greenDays} ngày lãi</span>
-              <span className="mx-1 text-zinc-600">·</span>
-              <span className="text-rose-400">{monthStats.redDays} ngày lỗ</span>
+              <span className="text-profit">
+                {monthStats.greenDays} {t.calendar.greenDays}
+              </span>
+              <span className="mx-1 text-fg-faint">·</span>
+              <span className="text-loss">
+                {monthStats.redDays} {t.calendar.redDays}
+              </span>
             </Badge>
             <Badge
               variant={
@@ -189,13 +196,13 @@ export default function CalendarPage() {
         <CardContent className="pt-4">
           <div className="overflow-x-auto">
             <div className="min-w-[700px]">
-              <div className="grid grid-cols-8 gap-2 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                {WEEKDAYS.map((w) => (
+              <div className="grid grid-cols-8 gap-2 text-center text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+                {t.calendar.weekdays.map((w) => (
                   <div key={w} className="py-1">
                     {w}
                   </div>
                 ))}
-                <div className="py-1 text-indigo-400">Tổng tuần</div>
+                <div className="py-1 text-indigo-500">{t.calendar.weeklyTotal}</div>
               </div>
 
               <div className="mt-2 space-y-2">
@@ -218,7 +225,7 @@ export default function CalendarPage() {
                           return (
                             <div
                               key={cIdx}
-                              className="min-h-[92px] rounded-xl border border-white/[0.03] bg-[#0B0C0F]/40"
+                              className="min-h-[92px] rounded-xl border border-dashed border-border bg-subtle opacity-45"
                             />
                           );
                         }
@@ -238,11 +245,11 @@ export default function CalendarPage() {
                               )}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="font-num text-xs font-medium text-zinc-300">
+                                <span className="font-num text-xs font-medium text-fg-secondary">
                                   {cell.dayNum}
                                 </span>
-                                <span className="font-num text-[10.5px] text-zinc-400">
-                                  {summary.tradeCount}L
+                                <span className="font-num text-[10.5px] text-fg-muted">
+                                  {summary.tradeCount}T
                                 </span>
                               </div>
                               <div className="text-right">
@@ -251,7 +258,7 @@ export default function CalendarPage() {
                                 >
                                   {formatCurrency(summary.netPnl, activeAccountCurrency, true)}
                                 </p>
-                                <p className="font-num mt-0.5 text-[10.5px] text-zinc-400">
+                                <p className="font-num mt-0.5 text-[10.5px] text-fg-muted">
                                   {summary.winCount}W / {summary.lossCount}L
                                 </p>
                               </div>
@@ -262,13 +269,13 @@ export default function CalendarPage() {
                         return (
                           <div
                             key={cell.dateKey}
-                            className="flex min-h-[92px] flex-col justify-between rounded-xl border border-white/[0.06] bg-[#0D0E12] p-2.5"
+                            className="flex min-h-[92px] flex-col justify-between rounded-xl border border-border bg-subtle p-2.5"
                           >
-                            <span className="font-num text-xs text-zinc-500">{cell.dayNum}</span>
+                            <span className="font-num text-xs text-fg-muted">{cell.dayNum}</span>
                             {loading ? (
                               <Skeleton className="ml-auto h-4 w-12" />
                             ) : (
-                              <span className="font-num text-right text-[11px] text-zinc-700">
+                              <span className="font-num text-right text-[11px] text-fg-faint">
                                 —
                               </span>
                             )}
@@ -277,23 +284,25 @@ export default function CalendarPage() {
                       })}
 
                       {/* Weekly Summary Column */}
-                      <div className="flex min-h-[92px] flex-col justify-between rounded-xl border border-white/[0.08] bg-[#16181D]/80 p-2.5">
-                        <span className="text-[11px] font-medium text-zinc-500">
-                          Tuần {wIdx + 1}
+                      <div className="flex min-h-[92px] flex-col justify-between rounded-xl border border-border bg-elevated p-2.5">
+                        <span className="text-[11px] font-medium text-fg-muted">
+                          {t.calendar.weekPrefix} {wIdx + 1}
                         </span>
                         <div className="text-right">
                           <p
                             className={cn(
                               'font-num text-[13px] font-bold',
-                              weekTrades > 0 ? pnlColorClass(weekPnl) : 'text-zinc-600',
+                              weekTrades > 0 ? pnlColorClass(weekPnl) : 'text-fg-faint',
                             )}
                           >
                             {weekTrades > 0
                               ? formatCurrency(weekPnl, activeAccountCurrency, true)
                               : '—'}
                           </p>
-                          <p className="font-num mt-0.5 text-[10.5px] text-zinc-500">
-                            {weekTrades > 0 ? `${weekTrades} lệnh` : 'Nghỉ'}
+                          <p className="font-num mt-0.5 text-[10.5px] text-fg-muted">
+                            {weekTrades > 0
+                              ? `${weekTrades} ${t.common.tradesCount}`
+                              : t.calendar.noTradeDay}
                           </p>
                         </div>
                       </div>

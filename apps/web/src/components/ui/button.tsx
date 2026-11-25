@@ -10,14 +10,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-indigo-500 text-white shadow-[0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.18)] hover:bg-indigo-400 active:scale-[0.99]',
+          'bg-indigo-600 dark:bg-indigo-500 text-white shadow-sm hover:bg-indigo-500 dark:hover:bg-indigo-400 active:scale-[0.99]',
         secondary:
-          'bg-[#16181D] text-zinc-200 border border-white/[0.08] hover:border-white/[0.15] hover:bg-[#1C1F27] hover:text-white',
+          'bg-elevated text-fg-secondary border border-border hover:border-border-strong hover:bg-hover hover:text-fg',
         outline:
-          'border border-white/[0.09] bg-transparent text-zinc-300 hover:border-white/[0.18] hover:bg-white/[0.04] hover:text-white',
-        ghost: 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-100',
+          'border border-border bg-transparent text-fg-secondary hover:border-border-strong hover:bg-hover hover:text-fg',
+        ghost: 'text-fg-muted hover:bg-hover hover:text-fg',
         destructive:
-          'bg-rose-500/12 text-rose-400 border border-rose-500/25 hover:bg-rose-500/20 hover:text-rose-300',
+          'bg-[var(--loss-bg)] text-loss border border-[var(--loss-border)] hover:opacity-90',
       },
       size: {
         default: 'h-9 px-3.5 text-[13px]',
