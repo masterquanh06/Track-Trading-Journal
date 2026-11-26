@@ -1,7 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Platform, Prisma } from '@prisma/client';
+import {
+  CreateAccountInput,
+  reconcileAccountCapital,
+  resolveSyncAccountCapitalUpdate,
+  UpdateAccountInput,
+} from '@trackdailytrade/shared';
 import Decimal from 'decimal.js';
-import { CreateAccountInput, UpdateAccountInput } from '@trackdailytrade/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { DefaultUserService } from '../common/default-user.service';
 import { formatMoney } from '../common/decimal.util';
@@ -39,19 +44,13 @@ export class AccountsService {
     );
 
     return accounts.map((acc) => {
-      const initialBalance = new Decimal(acc.initialBalance.toString());
       const netPnl = pnlByAccount.get(acc.id) ?? new Decimal(0);
-      const fallbackComputedBalance = initialBalance.plus(netPnl);
-
-      // Prefer live broker balance/equity synced from MT5 EA; fallback to initialBalance + sum(netPnl)
-      const currentBalance =
-        acc.currentBalance !== null
-          ? new Decimal(acc.currentBalance.toString())
-          : fallbackComputedBalance;
-      const currentEquity =
-        acc.currentEquity !== null
-          ? new Decimal(acc.currentEquity.toString())
-          : currentBalance;
+      const reconciled = reconcileAccountCapital({
+        initialBalance: acc.initialBalance.toString(),
+        storedLiveBalance: acc.currentBalance?.toString() ?? null,
+        storedLiveEquity: acc.currentEquity?.toString() ?? null,
+        allTimeClosedNetPnl: netPnl.toString(),
+      });
 
       return {
         id: acc.id,
@@ -60,13 +59,13 @@ export class AccountsService {
         platform: acc.platform,
         accountNumber: acc.accountNumber,
         currency: acc.currency,
-        initialBalance: formatMoney(initialBalance),
-        currentBalance: formatMoney(currentBalance),
-        currentEquity: formatMoney(currentEquity),
+        initialBalance: reconciled.initialBalance,
+        currentBalance: reconciled.currentBalance,
+        currentEquity: reconciled.currentEquity,
         brokerTimezone: acc.brokerTimezone,
         displayTimezone: acc.displayTimezone,
         tradeCount: acc._count.trades,
-        netPnl: formatMoney(netPnl),
+        netPnl: reconciled.netPnl,
         createdAt: acc.createdAt.toISOString(),
         updatedAt: acc.updatedAt.toISOString(),
       };
@@ -87,24 +86,19 @@ export class AccountsService {
       _sum: { netPnl: true },
     });
 
-    const initialBalance = new Decimal(account.initialBalance.toString());
-    const netPnl = new Decimal(pnlAgg._sum.netPnl?.toString() ?? '0');
-    const fallbackBalance = initialBalance.plus(netPnl);
-    const currentBalance =
-      account.currentBalance !== null
-        ? new Decimal(account.currentBalance.toString())
-        : fallbackBalance;
-    const currentEquity =
-      account.currentEquity !== null
-        ? new Decimal(account.currentEquity.toString())
-        : currentBalance;
+    const reconciled = reconcileAccountCapital({
+      initialBalance: account.initialBalance.toString(),
+      storedLiveBalance: account.currentBalance?.toString() ?? null,
+      storedLiveEquity: account.currentEquity?.toString() ?? null,
+      allTimeClosedNetPnl: pnlAgg._sum.netPnl?.toString() ?? '0',
+    });
 
     return {
       ...account,
-      initialBalance: formatMoney(initialBalance),
-      currentBalance: formatMoney(currentBalance),
-      currentEquity: formatMoney(currentEquity),
-      netPnl: formatMoney(netPnl),
+      initialBalance: reconciled.initialBalance,
+      currentBalance: reconciled.currentBalance,
+      currentEquity: reconciled.currentEquity,
+      netPnl: reconciled.netPnl,
       tradeCount: account._count.trades,
     };
   }
@@ -182,13 +176,14 @@ export class AccountsService {
 
   /**
    * Used by MT5 Webhook Adapter to resolve or auto-register an account by `accountNumber`,
-   * and persist live `accountBalance` / `accountEquity` directly from MT5 terminal.
+   * and persist live `initialCapital` / `accountBalance` / `accountEquity` per account cleanly.
    */
   async findOrCreateByMt5AccountNumber(params: {
     accountNumber: string;
     broker?: string;
     currency?: string;
     brokerTimezone?: string;
+    initialCapital?: string | null;
     accountBalance?: string | null;
     accountEquity?: string | null;
   }) {
@@ -203,32 +198,51 @@ export class AccountsService {
       },
     });
 
-    const hasLiveBalance = params.accountBalance !== undefined && params.accountBalance !== null;
-    const hasLiveEquity = params.accountEquity !== undefined && params.accountEquity !== null;
-
     if (existing) {
-      if (hasLiveBalance || hasLiveEquity || params.currency || params.broker) {
+      const patch = resolveSyncAccountCapitalUpdate({
+        existingInitialBalance: existing.initialBalance.toString(),
+        incomingInitialCapital: params.initialCapital ?? null,
+        incomingBalance: params.accountBalance ?? null,
+        incomingEquity: params.accountEquity ?? null,
+      });
+
+      const updateData: Prisma.TradingAccountUpdateInput = {
+        ...(patch.initialBalance !== undefined
+          ? { initialBalance: new Prisma.Decimal(patch.initialBalance) }
+          : {}),
+        ...(patch.currentBalance !== undefined
+          ? { currentBalance: new Prisma.Decimal(patch.currentBalance) }
+          : {}),
+        ...(patch.currentEquity !== undefined
+          ? { currentEquity: new Prisma.Decimal(patch.currentEquity) }
+          : {}),
+        ...(params.currency ? { currency: params.currency.toUpperCase() } : {}),
+        ...(!existing.broker && params.broker ? { broker: params.broker } : {}),
+      };
+
+      if (Object.keys(updateData).length > 0) {
         return this.prisma.tradingAccount.update({
           where: { id: existing.id },
-          data: {
-            ...(hasLiveBalance
-              ? { currentBalance: new Prisma.Decimal(params.accountBalance!) }
-              : {}),
-            ...(hasLiveEquity
-              ? { currentEquity: new Prisma.Decimal(params.accountEquity!) }
-              : hasLiveBalance
-                ? { currentEquity: new Prisma.Decimal(params.accountBalance!) }
-                : {}),
-            ...(params.currency ? { currency: params.currency.toUpperCase() } : {}),
-            ...(!existing.broker && params.broker ? { broker: params.broker } : {}),
-          },
+          data: updateData,
         });
       }
       return existing;
     }
 
-    const initDecimal = hasLiveBalance
-      ? new Prisma.Decimal(params.accountBalance!)
+    // For a brand-new auto-registered account:
+    // If MT5 provided `initialCapital` (DEAL_TYPE_BALANCE deposits), use it directly.
+    // Otherwise start with `0` so TradeIngestionService derives `liveBalance - allTimeClosedNetPnl`
+    // atomically after persisting the incoming trades (preventing post-trade balance from becoming initialBalance!).
+    const createPatch = resolveSyncAccountCapitalUpdate({
+      existingInitialBalance: null,
+      isNewAccount: false,
+      incomingInitialCapital: params.initialCapital ?? null,
+      incomingBalance: params.accountBalance ?? null,
+      incomingEquity: params.accountEquity ?? null,
+    });
+
+    const initialBalanceDecimal = params.initialCapital
+      ? new Prisma.Decimal(createPatch.initialBalance ?? params.initialCapital)
       : new Prisma.Decimal('0');
 
     return this.prisma.tradingAccount.create({
@@ -241,12 +255,14 @@ export class AccountsService {
         platform: Platform.MT5,
         accountNumber: params.accountNumber,
         currency: (params.currency ?? 'USD').toUpperCase(),
-        initialBalance: initDecimal,
-        currentBalance: hasLiveBalance ? new Prisma.Decimal(params.accountBalance!) : null,
-        currentEquity: hasLiveEquity
-          ? new Prisma.Decimal(params.accountEquity!)
-          : hasLiveBalance
-            ? new Prisma.Decimal(params.accountBalance!)
+        initialBalance: initialBalanceDecimal,
+        currentBalance:
+          createPatch.currentBalance !== undefined
+            ? new Prisma.Decimal(createPatch.currentBalance)
+            : null,
+        currentEquity:
+          createPatch.currentEquity !== undefined
+            ? new Prisma.Decimal(createPatch.currentEquity)
             : null,
         brokerTimezone: params.brokerTimezone ?? 'Europe/Athens',
         displayTimezone: user.displayTimezone,

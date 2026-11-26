@@ -1,5 +1,13 @@
+import { normalizeDecimalString } from '@trackdailytrade/shared';
+
+function toSafeNumber(value: string | number): number {
+  if (typeof value === 'number') return value;
+  const normalized = normalizeDecimalString(value);
+  return normalized !== null ? Number(normalized) : Number.NaN;
+}
+
 export function formatCurrency(value: string | number, currency = 'USD', showSign = false): string {
-  const num = typeof value === 'string' ? Number(value) : value;
+  const num = toSafeNumber(value);
   if (!Number.isFinite(num)) return '$0.00';
 
   const absFormatted = new Intl.NumberFormat('en-US', {
@@ -15,18 +23,18 @@ export function formatCurrency(value: string | number, currency = 'USD', showSig
 }
 
 export function formatCompactCurrency(value: string | number, currency = 'USD'): string {
-  const num = typeof value === 'string' ? Number(value) : value;
+  const num = toSafeNumber(value);
   if (!Number.isFinite(num)) return '$0';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: currency || 'USD',
-    notation: Math.abs(num) >= 100000 ? 'compact' : 'standard',
+    notation: Math.abs(num) >= 1_000_000 ? 'compact' : 'standard',
     maximumFractionDigits: Math.abs(num) >= 1000 ? 0 : 2,
   }).format(num);
 }
 
 export function formatNumber(value: string | number, decimals = 2): string {
-  const num = typeof value === 'string' ? Number(value) : value;
+  const num = toSafeNumber(value);
   if (!Number.isFinite(num)) return '0';
   return num.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
@@ -77,7 +85,7 @@ export function formatShortDate(yyyyMmDd: string): string {
 }
 
 export function pnlColorClass(value: string | number): string {
-  const num = typeof value === 'string' ? Number(value) : value;
+  const num = toSafeNumber(value);
   if (num > 0) return 'text-profit';
   if (num < 0) return 'text-loss';
   return 'text-fg-muted';

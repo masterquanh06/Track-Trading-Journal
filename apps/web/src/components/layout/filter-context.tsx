@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { aggregatePortfolioCapital } from '@trackdailytrade/shared';
 import { api, type AccountDto, type GlobalFilterParams, type TagDto } from '@/lib/api';
 
 export type DatePreset = '7d' | '30d' | '90d' | 'ytd' | 'all' | 'custom';
@@ -22,8 +23,9 @@ interface FilterContextValue {
   triggerGlobalRefresh: () => Promise<void>;
   activeAccountCurrency: string;
   selectedAccount: AccountDto | null;
-  totalPortfolioEquity: number;
-  totalPortfolioNetPnl: number;
+  totalPortfolioEquity: string;
+  totalPortfolioBalance: string;
+  totalPortfolioNetPnl: string;
 }
 
 const DEFAULT_FILTERS: GlobalFilterParams = {
@@ -123,15 +125,14 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
     [selectedAccount, accounts],
   );
 
-  const totalPortfolioEquity = React.useMemo(
-    () => accounts.reduce((sum, a) => sum + Number(a.currentEquity || 0), 0),
+  const portfolioCapital = React.useMemo(
+    () => aggregatePortfolioCapital(accounts),
     [accounts],
   );
 
-  const totalPortfolioNetPnl = React.useMemo(
-    () => accounts.reduce((sum, a) => sum + Number(a.netPnl || 0), 0),
-    [accounts],
-  );
+  const totalPortfolioEquity = portfolioCapital.totalCurrentEquity;
+  const totalPortfolioBalance = portfolioCapital.totalCurrentBalance;
+  const totalPortfolioNetPnl = portfolioCapital.totalNetPnl;
 
   const value = React.useMemo<FilterContextValue>(
     () => ({
@@ -152,6 +153,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
       activeAccountCurrency,
       selectedAccount,
       totalPortfolioEquity,
+      totalPortfolioBalance,
       totalPortfolioNetPnl,
     }),
     [
@@ -171,6 +173,7 @@ export function FilterProvider({ children }: { children: React.ReactNode }) {
       activeAccountCurrency,
       selectedAccount,
       totalPortfolioEquity,
+      totalPortfolioBalance,
       totalPortfolioNetPnl,
     ],
   );

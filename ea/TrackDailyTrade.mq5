@@ -4,7 +4,7 @@
 //|     Live Balance/Equity + Partial-Close + Initial SL + Backfill  |
 //+------------------------------------------------------------------+
 #property copyright "TrackDailyTrade"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 
 //--- Input parameters
@@ -377,15 +377,61 @@ bool BuildClosedPositionJson(const long posId, string &outJson)
 }
 
 //+------------------------------------------------------------------+
-//| POST batch JSON array + live accountBalance & accountEquity      |
+//| Compute net deposited capital from DEAL_TYPE_BALANCE deals only  |
+//+------------------------------------------------------------------+
+bool ComputeNetDepositsCapital(double &outInitialCapital)
+{
+   outInitialCapital = 0.0;
+   if(!HistorySelect(0, TimeCurrent() + 86400))
+      return false;
+
+   int total = HistoryDealsTotal();
+   int balanceDealsCount = 0;
+   double netDeposits = 0.0;
+
+   for(int i = 0; i < total; i++)
+   {
+      ulong dealTicket = HistoryDealGetTicket(i);
+      if(dealTicket == 0)
+         continue;
+
+      ENUM_DEAL_TYPE dealType = (ENUM_DEAL_TYPE)HistoryDealGetInteger(dealTicket, DEAL_TYPE);
+      if(dealType != DEAL_TYPE_BALANCE)
+         continue;
+
+      netDeposits += HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+      balanceDealsCount++;
+   }
+
+   if(balanceDealsCount <= 0 || netDeposits <= 0.0)
+      return false;
+
+   outInitialCapital = netDeposits;
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| POST batch JSON array + live Balance, Equity & Initial Capital   |
 //+------------------------------------------------------------------+
 bool PostTradesBatch(const string &tradeJsonItems[], const int count)
 {
-   string accountNumber  = IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+   long accountLogin = AccountInfoInteger(ACCOUNT_LOGIN);
+   if(accountLogin <= 0)
+   {
+      Print("[TrackDailyTrade] Skipping sync: MT5 account login is not initialized (ACCOUNT_LOGIN <= 0).");
+      return false;
+   }
+
+   string accountNumber  = IntegerToString(accountLogin);
    string broker         = EscapeJsonString(AccountInfoString(ACCOUNT_COMPANY));
    string currency       = EscapeJsonString(AccountInfoString(ACCOUNT_CURRENCY));
    string accountBalance = DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
    string accountEquity  = DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2);
+
+   double netDeposits = 0.0;
+   string initialCapPart = "";
+   if(ComputeNetDepositsCapital(netDeposits))
+      initialCapPart = "\"initialCapital\":\"" + DoubleToString(netDeposits, 2) + "\",";
 
    string tzPart = "";
    if(StringLen(InpBrokerTimezone) > 0)
@@ -412,8 +458,11 @@ bool PostTradesBatch(const string &tradeJsonItems[], const int count)
          + "\"accountNumber\":\"" + accountNumber + "\","
          + "\"broker\":\"" + broker + "\","
          + "\"currency\":\"" + currency + "\","
+         + initialCapPart
          + "\"accountBalance\":\"" + accountBalance + "\","
          + "\"accountEquity\":\"" + accountEquity + "\","
+         + "\"balance\":\"" + accountBalance + "\","
+         + "\"equity\":\"" + accountEquity + "\","
          + tzPart
          + "\"trades\":" + tradesArray
          + "}";
@@ -551,13 +600,32 @@ void SyncRecentHistory(const int days)
 }
 
 //+------------------------------------------------------------------+
+//| Send live account Balance/Equity snapshot without creating trade |
+//+------------------------------------------------------------------+
+void PostAccountStateOnly()
+{
+   string emptyTrades[];
+   ArrayResize(emptyTrades, 0);
+   if(PostTradesBatch(emptyTrades, 0))
+   {
+      string ts = TimeToString(TimeLocal(), TIME_MINUTES);
+      UpdateStatusLabel("Balance synced @ " + ts, clrLimeGreen);
+   }
+}
+
+//+------------------------------------------------------------------+
 //| Send a single closed position immediately (real-time webhook)    |
 //+------------------------------------------------------------------+
 void SendSingleClosedPosition(const long posId)
 {
    string itemJson = "";
    if(!BuildClosedPositionJson(posId, itemJson))
+   {
+      // Partial close: position still has remaining volume, so do not create a duplicate trade,
+      // but immediately push live Balance & Equity so Web UI stays in sync with MT5.
+      PostAccountStateOnly();
       return;
+   }
 
    string arr[1];
    arr[0] = itemJson;
@@ -628,7 +696,7 @@ int OnInit()
    CreateChartControls();
 
    PrintFormat(
-      "[TrackDailyTrade] Initialized v1.10 for MT5 #%I64d -> %s",
+      "[TrackDailyTrade] Initialized v1.20 for MT5 #%I64d -> %s",
       AccountInfoInteger(ACCOUNT_LOGIN),
       InpWebhookBatchUrl
    );
@@ -677,9 +745,7 @@ void OnTradeTransaction(
       {
          if(dealType == DEAL_TYPE_BALANCE || dealType == DEAL_TYPE_CREDIT || dealType == DEAL_TYPE_BONUS)
          {
-            string emptyTrades[];
-            ArrayResize(emptyTrades, 0);
-            PostTradesBatch(emptyTrades, 0); // Refresh live accountBalance/accountEquity without creating a trade!
+            PostAccountStateOnly(); // Refresh live initialCapital/Balance/Equity without creating a trade!
          }
          return;
       }

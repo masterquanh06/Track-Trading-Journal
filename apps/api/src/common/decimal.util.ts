@@ -1,11 +1,15 @@
+import { normalizeDecimalString } from '@trackdailytrade/shared';
 import Decimal from 'decimal.js';
 import { TradeDirection } from '@prisma/client';
 
 export function toDecimal(value: Decimal.Value | null | undefined): Decimal | null {
   if (value === null || value === undefined) return null;
-  const cleaned = typeof value === 'string' ? value.trim().replace(/\s+/g, '') : value;
-  if (cleaned === '') return null;
-  return new Decimal(cleaned);
+  if (value instanceof Decimal) return value.isFinite() ? value : null;
+  const normalized = normalizeDecimalString(
+    typeof value === 'number' ? value : String(value),
+  );
+  if (normalized === null) return null;
+  return new Decimal(normalized);
 }
 
 export function toDecimalOrZero(value: Decimal.Value | null | undefined): Decimal {

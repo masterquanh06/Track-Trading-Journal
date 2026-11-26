@@ -161,4 +161,65 @@ describe('Mt5StatementImportAdapter', () => {
     expect(result.trades[0].openTime.toISOString()).toBe('2026-05-01T11:00:00.000Z');
     expect(result.trades[0].netPnl.toFixed(2)).toBe('95.00');
   });
+
+  it('extracts Deposit, Balance, Equity, and Currency from MT5 HTML summary while excluding balance deals from trades[]', async () => {
+    const demo100kHtml = `<!DOCTYPE html>
+<html>
+<body>
+<table>
+  <tr><td>Account:</td><td>5059484297 (USD, MetaQuotes-Demo, demo, Hedge)</td></tr>
+  <tr><th colspan="13"><b>Positions</b></th></tr>
+  <tr>
+    <td>Time</td><td>Position</td><td>Symbol</td><td>Type</td><td>Volume</td>
+    <td>Price</td><td>S / L</td><td>T / P</td><td>Time</td><td>Price</td>
+    <td>Commission</td><td>Swap</td><td>Profit</td>
+  </tr>
+  <tr>
+    <td>2026.11.26 01:30:00</td><td>9001</td><td>XAUUSD</td><td>sell</td><td>10.00</td>
+    <td>3573.82</td><td>0</td><td>0</td><td>2026.11.26 01:36:36</td><td>3574.12</td>
+    <td>0.00</td><td>0.00</td><td>-300.00</td>
+  </tr>
+  <tr>
+    <td>2026.11.26 01:31:00</td><td>9002</td><td>XAUUSD</td><td>sell</td><td>10.00</td>
+    <td>3573.80</td><td>0</td><td>0</td><td>2026.11.26 01:36:36</td><td>3574.12</td>
+    <td>0.00</td><td>0.00</td><td>-320.00</td>
+  </tr>
+  <tr>
+    <td>2026.11.26 01:40:00</td><td>9003</td><td>XAUUSD</td><td>sell</td><td>10.00</td>
+    <td>3581.91</td><td>0</td><td>0</td><td>2026.11.26 01:43:01</td><td>3581.99</td>
+    <td>0.00</td><td>0.00</td><td>-80.00</td>
+  </tr>
+  <tr>
+    <td>2026.11.26 01:41:00</td><td>9004</td><td>XAUUSD</td><td>sell</td><td>10.00</td>
+    <td>3581.90</td><td>0</td><td>0</td><td>2026.11.26 01:43:01</td><td>3581.99</td>
+    <td>0.00</td><td>0.00</td><td>-90,00</td>
+  </tr>
+  <tr><th colspan="13"><b>Deals</b></th></tr>
+  <tr><td>Time</td><td>Deal</td><td>Symbol</td><td>Type</td><td>Profit</td></tr>
+  <tr><td>2026.11.26 00:13:30</td><td>8001</td><td></td><td>balance</td><td>100 000.00</td></tr>
+  <tr><th colspan="13"><b>Results</b></th></tr>
+  <tr><td>Balance:</td><td>99 210.00</td><td>Equity:</td><td>99 210.00</td></tr>
+  <tr><td>Deposit/Withdrawal:</td><td>100 000.00</td></tr>
+</table>
+</body>
+</html>`;
+
+    const result = await adapter.parse(
+      { buffer: Buffer.from(demo100kHtml, 'utf-8'), fileName: 'ReportHistory-5059484297.html' },
+      { brokerTimezone: 'Europe/Athens' },
+    );
+
+    expect(result.trades).toHaveLength(4);
+    const totalPnl = result.trades.reduce((s, tr) => s + Number(tr.netPnl.toFixed(2)), 0);
+    expect(totalPnl).toBe(-790);
+    // Verify European decimal "-90,00" parsed as -90.00, NOT -9000!
+    expect(result.trades[3].netPnl.toFixed(2)).toBe('-90.00');
+
+    expect(result.accountSnapshot).toEqual({
+      initialCapital: '100000.00',
+      balance: '99210.00',
+      equity: '99210.00',
+      currency: 'USD',
+    });
+  });
 });

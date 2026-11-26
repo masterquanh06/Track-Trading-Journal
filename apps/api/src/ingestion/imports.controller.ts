@@ -56,6 +56,10 @@ export class ImportsController {
       skippedRows: parsed.skippedRows,
       warnings: parsed.warnings,
       dryRun,
+      initialCapital: parsed.accountSnapshot?.initialCapital ?? null,
+      accountBalance: parsed.accountSnapshot?.balance ?? null,
+      accountEquity: parsed.accountSnapshot?.equity ?? null,
+      currency: parsed.accountSnapshot?.currency ?? null,
     });
   }
 

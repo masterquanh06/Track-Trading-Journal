@@ -255,4 +255,48 @@ describe('AnalyticsService', () => {
     expect(overview.zellaScore.overall).toBeGreaterThan(0);
     expect(overview.zellaScore.metrics).toHaveLength(5);
   });
+
+  it('computes 100k demo account (5059484297) with 4 losing XAUUSD trades (-$790) accurately as $99,210.00', async () => {
+    const demoTrades = [
+      { ...sampleTrades[0], id: 'd1', accountId: 'acc-5059484297', netPnl: new Prisma.Decimal('-300.00'), grossPnl: new Prisma.Decimal('-300.00') },
+      { ...sampleTrades[0], id: 'd2', accountId: 'acc-5059484297', netPnl: new Prisma.Decimal('-320.00'), grossPnl: new Prisma.Decimal('-320.00') },
+      { ...sampleTrades[0], id: 'd3', accountId: 'acc-5059484297', netPnl: new Prisma.Decimal('-80.00'), grossPnl: new Prisma.Decimal('-80.00') },
+      { ...sampleTrades[0], id: 'd4', accountId: 'acc-5059484297', netPnl: new Prisma.Decimal('-90.00'), grossPnl: new Prisma.Decimal('-90.00') },
+    ];
+
+    const mockPrisma = {
+      tradingAccount: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'acc-5059484297',
+            initialBalance: new Prisma.Decimal('100000.00'),
+            currentBalance: new Prisma.Decimal('99210.00'),
+          },
+        ]),
+      },
+      trade: {
+        groupBy: jest.fn(async () => [
+          { accountId: 'acc-5059484297', _sum: { netPnl: new Prisma.Decimal('-790.00') } },
+        ]),
+        aggregate: jest.fn(async () => ({ _sum: { netPnl: null } })),
+        findMany: jest.fn(async () => demoTrades),
+      },
+    } as unknown as PrismaService;
+
+    const mockDefaultUser = {
+      getDefaultUser: jest.fn(async () => defaultUser),
+    } as unknown as DefaultUserService;
+
+    const service = new AnalyticsService(mockPrisma, mockDefaultUser);
+    const overview = await service.getOverview({
+      accountId: 'acc-5059484297',
+      timezone: 'Asia/Ho_Chi_Minh',
+    });
+
+    expect(overview.startingEquity).toBe('100000.00');
+    expect(overview.endingEquity).toBe('99210.00');
+    expect(overview.netPnl).toBe('-790.00');
+    expect(overview.maxDrawdownUsd).toBe('790.00');
+    expect(overview.maxDrawdownPct).toBe(0.79);
+  });
 });

@@ -1,25 +1,35 @@
 import { z } from 'zod';
+import { normalizeDecimalString } from './capital.util';
 import { TradeDirectionEnum } from './enums';
-
-const DECIMAL_REGEX = /^-?\d+(\.\d+)?$/;
 
 export const DecimalStringSchema = z
   .union([z.string(), z.number()])
-  .transform((val) => String(val).trim().replace(/\s+/g, ''))
-  .refine((val) => DECIMAL_REGEX.test(val), {
-    message: 'Must be a valid decimal number',
+  .transform((val, ctx) => {
+    const normalized = normalizeDecimalString(val);
+    if (normalized === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Must be a valid decimal number',
+      });
+      return z.NEVER;
+    }
+    return normalized;
   });
 
 export const NullableDecimalStringSchema = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
-  .transform((val) => {
+  .transform((val, ctx) => {
     if (val === null || val === undefined) return null;
-    const cleaned = String(val).trim().replace(/\s+/g, '');
-    if (cleaned === '') return null;
-    return cleaned;
-  })
-  .refine((val) => val === null || DECIMAL_REGEX.test(val), {
-    message: 'Must be a valid decimal number or null',
+    if (typeof val === 'string' && val.trim() === '') return null;
+    const normalized = normalizeDecimalString(val);
+    if (normalized === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Must be a valid decimal number or null',
+      });
+      return z.NEVER;
+    }
+    return normalized;
   });
 
 /**
@@ -52,25 +62,28 @@ export const Mt5WebhookTradeSchema = z.object({
 
 export type Mt5WebhookTrade = z.infer<typeof Mt5WebhookTradeSchema>;
 
-export const Mt5SingleWebhookSchema = z.object({
+const AccountStateFields = {
   accountNumber: z.union([z.string(), z.number()]).transform((v) => String(v).trim()),
   broker: z.string().trim().optional(),
   currency: z.string().trim().min(1).max(10).optional(),
   brokerTimezone: z.string().trim().optional(),
+  initialCapital: NullableDecimalStringSchema.optional(),
   accountBalance: NullableDecimalStringSchema.optional(),
   accountEquity: NullableDecimalStringSchema.optional(),
+  /** Canonical aliases supported alongside accountBalance / accountEquity */
+  balance: NullableDecimalStringSchema.optional(),
+  equity: NullableDecimalStringSchema.optional(),
+};
+
+export const Mt5SingleWebhookSchema = z.object({
+  ...AccountStateFields,
   trade: Mt5WebhookTradeSchema,
 });
 
 export type Mt5SingleWebhookPayload = z.infer<typeof Mt5SingleWebhookSchema>;
 
 export const Mt5BatchWebhookSchema = z.object({
-  accountNumber: z.union([z.string(), z.number()]).transform((v) => String(v).trim()),
-  broker: z.string().trim().optional(),
-  currency: z.string().trim().min(1).max(10).optional(),
-  brokerTimezone: z.string().trim().optional(),
-  accountBalance: NullableDecimalStringSchema.optional(),
-  accountEquity: NullableDecimalStringSchema.optional(),
+  ...AccountStateFields,
   trades: z.array(Mt5WebhookTradeSchema),
 });
 

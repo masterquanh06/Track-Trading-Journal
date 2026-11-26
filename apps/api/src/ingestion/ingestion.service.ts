@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, SyncStatus, TradeSource } from '@prisma/client';
+import { resolveSyncAccountCapitalUpdate } from '@trackdailytrade/shared';
 import Decimal from 'decimal.js';
 import { calculateRiskAndRMultiple, formatMoney, formatPrice } from '../common/decimal.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,8 +13,10 @@ export interface IngestOptions {
   skippedRows?: number;
   warnings?: string[];
   dryRun?: boolean;
+  initialCapital?: string | null;
   accountBalance?: string | null;
   accountEquity?: string | null;
+  currency?: string | null;
 }
 
 export interface IngestSummary {
@@ -238,44 +241,61 @@ export class TradeIngestionService {
         }
       }
 
-      // Sync account balance & equity:
-      // 1) If live EA provided `accountBalance` / `accountEquity`, store directly (source of truth).
-      // 2) Else if importing HTML/CSV without live EA balance, compute `initialBalance + sum(closedTrades.netPnl)`.
-      const hasLiveBalance = options.accountBalance !== undefined && options.accountBalance !== null;
-      const hasLiveEquity = options.accountEquity !== undefined && options.accountEquity !== null;
+      // Reconcile and persist Capital / Balance / Equity ONLY for this specific accountId:
+      // - Strictly uses real broker/report Balance/Equity/InitialCapital via pure resolveSyncAccountCapitalUpdate.
+      // - NEVER writes synthetic `initialBalance + sum(netPnl)` into `currentBalance`/`currentEquity`
+      //   when an import lacks explicit broker balance summary rows.
+      const hasAnyCapitalInput =
+        (options.initialCapital !== undefined && options.initialCapital !== null) ||
+        (options.accountBalance !== undefined && options.accountBalance !== null) ||
+        (options.accountEquity !== undefined && options.accountEquity !== null) ||
+        Boolean(options.currency);
 
-      if (hasLiveBalance || hasLiveEquity) {
-        await tx.tradingAccount.update({
-          where: { id: options.accountId },
-          data: {
-            ...(hasLiveBalance
-              ? { currentBalance: new Prisma.Decimal(options.accountBalance!) }
-              : {}),
-            ...(hasLiveEquity
-              ? { currentEquity: new Prisma.Decimal(options.accountEquity!) }
-              : hasLiveBalance
-                ? { currentEquity: new Prisma.Decimal(options.accountBalance!) }
-                : {}),
-          },
-        });
-      } else if (options.source === TradeSource.MT5_IMPORT && tx.tradingAccount && tx.trade.aggregate) {
-        const account = await tx.tradingAccount.findUnique({
-          where: { id: options.accountId },
-        });
-        if (account) {
+      if (hasAnyCapitalInput && tx.tradingAccount) {
+        const account =
+          typeof tx.tradingAccount.findUnique === 'function'
+            ? await tx.tradingAccount.findUnique({ where: { id: options.accountId } })
+            : null;
+
+        let allTimeClosedNetPnl: string | null = null;
+        if (typeof tx.trade.aggregate === 'function') {
           const agg = await tx.trade.aggregate({
             where: { accountId: options.accountId },
             _sum: { netPnl: true },
           });
-          const sumPnl = new Decimal(agg._sum.netPnl?.toString() ?? '0');
-          const computed = new Decimal(account.initialBalance.toString()).plus(sumPnl);
-          const dec = new Prisma.Decimal(computed.toFixed(2));
+          allTimeClosedNetPnl = agg._sum.netPnl?.toString() ?? '0';
+        } else {
+          // Fallback sum from current batch if aggregate is unavailable in minimal mocks
+          allTimeClosedNetPnl = uniqueTrades
+            .reduce((sum, tr) => sum.plus(tr.netPnl), new Decimal(0))
+            .toFixed(2);
+        }
+
+        const capitalPatch = resolveSyncAccountCapitalUpdate({
+          existingInitialBalance: account?.initialBalance?.toString() ?? null,
+          incomingInitialCapital: options.initialCapital ?? null,
+          incomingBalance: options.accountBalance ?? null,
+          incomingEquity: options.accountEquity ?? null,
+          allTimeClosedNetPnl,
+        });
+
+        const accountUpdateData: Prisma.TradingAccountUpdateInput = {
+          ...(capitalPatch.initialBalance !== undefined
+            ? { initialBalance: new Prisma.Decimal(capitalPatch.initialBalance) }
+            : {}),
+          ...(capitalPatch.currentBalance !== undefined
+            ? { currentBalance: new Prisma.Decimal(capitalPatch.currentBalance) }
+            : {}),
+          ...(capitalPatch.currentEquity !== undefined
+            ? { currentEquity: new Prisma.Decimal(capitalPatch.currentEquity) }
+            : {}),
+          ...(options.currency ? { currency: options.currency.trim().toUpperCase() } : {}),
+        };
+
+        if (Object.keys(accountUpdateData).length > 0) {
           await tx.tradingAccount.update({
             where: { id: options.accountId },
-            data: {
-              currentBalance: dec,
-              currentEquity: dec,
-            },
+            data: accountUpdateData,
           });
         }
       }

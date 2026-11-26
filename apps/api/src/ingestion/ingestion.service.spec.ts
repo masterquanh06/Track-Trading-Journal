@@ -146,7 +146,7 @@ describe('TradeIngestionService', () => {
     );
   });
 
-  it('computes currentBalance = initialBalance + sum(closedTrades.netPnl) on HTML/CSV import', async () => {
+  it('does NOT write synthetic currentBalance on HTML/CSV import without statement balance summary', async () => {
     const accountUpdateCalls: Array<{ where: unknown; data: Record<string, unknown> }> = [];
     const mockTx = {
       trade: {
@@ -179,12 +179,73 @@ describe('TradeIngestionService', () => {
     await service.ingestTrades([buildNormalizedTrade({ netPnl: new Decimal('1250.50') })], {
       accountId: 'acc-import',
       source: TradeSource.MT5_IMPORT,
-      fileName: 'ReportHistory.html',
+      fileName: 'ReportHistory.csv',
     });
 
-    expect(accountUpdateCalls).toHaveLength(1);
-    expect((accountUpdateCalls[0].data.currentBalance as Prisma.Decimal).toFixed(2)).toBe(
-      '11250.50',
+    // No broker balance/equity provided -> do not pollute currentBalance with synthetic initialBalance + PnL
+    expect(accountUpdateCalls).toHaveLength(0);
+  });
+
+  it('updates ONLY the targeted account with exact initialCapital, balance, and equity across multi-account sync', async () => {
+    const accountUpdateCalls: Array<{ where: { id: string }; data: Record<string, unknown> }> = [];
+
+    const accountRows: Record<string, { id: string; initialBalance: Prisma.Decimal }> = {
+      'acc-akira': { id: 'acc-akira', initialBalance: new Prisma.Decimal('377.00') },
+      'acc-demo2': { id: 'acc-demo2', initialBalance: new Prisma.Decimal('10000.00') },
+    };
+
+    const mockTx = {
+      trade: {
+        create: jest.fn(async (args) => args.data),
+        update: jest.fn(),
+        aggregate: jest.fn(async ({ where }: { where: { accountId: string } }) => ({
+          _sum: {
+            netPnl:
+              where.accountId === 'acc-demo2'
+                ? new Prisma.Decimal('-790.00')
+                : new Prisma.Decimal('0.00'),
+          },
+        })),
+      },
+      tradingAccount: {
+        findUnique: jest.fn(async ({ where }: { where: { id: string } }) => accountRows[where.id]),
+        update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+          accountUpdateCalls.push(args);
+          return args.data;
+        }),
+      },
+    };
+
+    const mockPrisma = {
+      trade: { findMany: jest.fn(async () => []) },
+      $transaction: jest.fn(async (fn: (tx: typeof mockTx) => Promise<void>) => fn(mockTx)),
+      syncLog: { create: jest.fn(async () => ({ id: 'log-demo2' })) },
+    } as unknown as PrismaService;
+
+    const service = new TradeIngestionService(mockPrisma);
+
+    await service.ingestTrades(
+      [
+        buildNormalizedTrade({ externalId: '9001', netPnl: new Decimal('-300.00'), grossPnl: new Decimal('-300.00'), commission: new Decimal('0') }),
+        buildNormalizedTrade({ externalId: '9002', netPnl: new Decimal('-320.00'), grossPnl: new Decimal('-320.00'), commission: new Decimal('0') }),
+        buildNormalizedTrade({ externalId: '9003', netPnl: new Decimal('-80.00'), grossPnl: new Decimal('-80.00'), commission: new Decimal('0') }),
+        buildNormalizedTrade({ externalId: '9004', netPnl: new Decimal('-90.00'), grossPnl: new Decimal('-90.00'), commission: new Decimal('0') }),
+      ],
+      {
+        accountId: 'acc-demo2',
+        source: TradeSource.MT5_WEBHOOK,
+        initialCapital: '100000.00',
+        accountBalance: '99210.00',
+        accountEquity: '99210.00',
+        currency: 'USD',
+      },
     );
+
+    expect(accountUpdateCalls).toHaveLength(1);
+    expect(accountUpdateCalls[0].where).toEqual({ id: 'acc-demo2' });
+    expect((accountUpdateCalls[0].data.initialBalance as Prisma.Decimal).toFixed(2)).toBe('100000.00');
+    expect((accountUpdateCalls[0].data.currentBalance as Prisma.Decimal).toFixed(2)).toBe('99210.00');
+    expect((accountUpdateCalls[0].data.currentEquity as Prisma.Decimal).toFixed(2)).toBe('99210.00');
+    expect(accountUpdateCalls[0].data.currency).toBe('USD');
   });
 });

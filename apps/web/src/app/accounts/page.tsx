@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Check, Copy, Link2, Plus, Tag as TagIcon, Trash2, Wallet } from 'lucide-react';
+import { Check, Copy, Link2, Pencil, Plus, Tag as TagIcon, Trash2, Wallet } from 'lucide-react';
+import { normalizeDecimalString } from '@trackdailytrade/shared';
 import { useGlobalFilters } from '@/components/layout/filter-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, API_BASE_URL } from '@/lib/api';
+import { api, API_BASE_URL, type AccountDto } from '@/lib/api';
 import {
   BROKER_TIMEZONE_PRESETS,
   DISPLAY_TIMEZONE_PRESETS,
@@ -42,10 +43,19 @@ export default function AccountsPage() {
   const [broker, setBroker] = React.useState('');
   const [accountNumber, setAccountNumber] = React.useState('');
   const [currency, setCurrency] = React.useState('USD');
-  const [initialBalance, setInitialBalance] = React.useState('10000');
+  const [initialBalance, setInitialBalance] = React.useState('');
   const [brokerTimezone, setBrokerTimezone] = React.useState('Europe/Athens');
   const [displayTimezone, setDisplayTimezone] = React.useState('Asia/Ho_Chi_Minh');
   const [savingAcc, setSavingAcc] = React.useState(false);
+
+  const [editingAccount, setEditingAccount] = React.useState<AccountDto | null>(null);
+  const [editName, setEditName] = React.useState('');
+  const [editBroker, setEditBroker] = React.useState('');
+  const [editInitialBalance, setEditInitialBalance] = React.useState('');
+  const [editCurrency, setEditCurrency] = React.useState('USD');
+  const [editBrokerTz, setEditBrokerTz] = React.useState('Europe/Athens');
+  const [editDisplayTz, setEditDisplayTz] = React.useState('Asia/Ho_Chi_Minh');
+  const [updatingAcc, setUpdatingAcc] = React.useState(false);
 
   const [tagName, setTagName] = React.useState('');
   const [tagColor, setTagColor] = React.useState(TAG_SWATCHES[0]);
@@ -72,25 +82,78 @@ export default function AccountsPage() {
     setSavingAcc(true);
     setError(null);
     try {
+      const normalizedInit = initialBalance.trim()
+        ? normalizeDecimalString(initialBalance)
+        : '0';
+      if (initialBalance.trim() && normalizedInit === null) {
+        setError('Initial Capital must be a valid number (e.g. 100000 or 100,000.00)');
+        setSavingAcc(false);
+        return;
+      }
+
       await api.createAccount({
         name: name.trim(),
         broker: broker.trim() || null,
         platform: 'MT5',
         accountNumber: accountNumber.trim(),
         currency: currency.trim().toUpperCase() || 'USD',
-        initialBalance: initialBalance.trim() || '0',
+        initialBalance: normalizedInit ?? '0',
         brokerTimezone,
         displayTimezone,
       });
       setName('');
       setBroker('');
       setAccountNumber('');
+      setInitialBalance('');
       setDialogOpen(false);
       await refreshReferences();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setSavingAcc(false);
+    }
+  };
+
+  const openEditAccount = (acc: AccountDto) => {
+    setEditingAccount(acc);
+    setEditName(acc.name);
+    setEditBroker(acc.broker ?? '');
+    setEditInitialBalance(acc.initialBalance);
+    setEditCurrency(acc.currency);
+    setEditBrokerTz(acc.brokerTimezone);
+    setEditDisplayTz(acc.displayTimezone);
+    setError(null);
+  };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAccount || !editName.trim()) return;
+    setUpdatingAcc(true);
+    setError(null);
+    try {
+      const normalizedInit = editInitialBalance.trim()
+        ? normalizeDecimalString(editInitialBalance)
+        : '0';
+      if (editInitialBalance.trim() && normalizedInit === null) {
+        setError('Initial Capital must be a valid number (e.g. 100000 or 100,000.00)');
+        setUpdatingAcc(false);
+        return;
+      }
+
+      await api.updateAccount(editingAccount.id, {
+        name: editName.trim(),
+        broker: editBroker.trim() || null,
+        currency: editCurrency.trim().toUpperCase() || 'USD',
+        initialBalance: normalizedInit ?? '0',
+        brokerTimezone: editBrokerTz,
+        displayTimezone: editDisplayTz,
+      });
+      setEditingAccount(null);
+      await refreshReferences();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update account');
+    } finally {
+      setUpdatingAcc(false);
     }
   };
 
@@ -190,9 +253,11 @@ export default function AccountsPage() {
                   </label>
                   <Input
                     className="font-num"
+                    placeholder="100,000"
                     value={initialBalance}
                     onChange={(e) => setInitialBalance(e.target.value)}
                   />
+                  <p className="text-[10.5px] text-fg-faint">{t.accountsPage.initBalanceHint}</p>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-fg-muted">{t.accountsPage.fieldCurrency}</label>
@@ -312,15 +377,26 @@ export default function AccountsPage() {
                       #{acc.accountNumber} · {acc.broker ?? 'MT5 Broker'}
                     </p>
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={`${t.common.delete} ${acc.name}`}
-                    className="h-7 w-7 text-fg-muted opacity-70 hover:text-loss group-hover:opacity-100"
-                    onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`${t.accountsPage.editAccountBtn} ${acc.name}`}
+                      className="h-7 w-7 text-fg-muted opacity-70 hover:text-fg group-hover:opacity-100"
+                      onClick={() => openEditAccount(acc)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`${t.common.delete} ${acc.name}`}
+                      className="h-7 w-7 text-fg-muted opacity-70 hover:text-loss group-hover:opacity-100"
+                      onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mt-4 flex items-baseline justify-between border-t border-border pt-3">
@@ -341,16 +417,137 @@ export default function AccountsPage() {
                 </div>
               </div>
 
-              <div className="font-num mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[11px] text-fg-muted">
-                <span>Balance {formatCurrency(acc.currentBalance, acc.currency)}</span>
-                <span>
-                  {acc.brokerTimezone} · {acc.tradeCount} {t.common.tradesCount}
-                </span>
+              <div className="font-num mt-3 space-y-1.5 border-t border-border pt-2.5 text-[11px] text-fg-muted">
+                <div className="flex items-center justify-between">
+                  <span>
+                    {t.accountsPage.currentBalance}:{' '}
+                    <span className="font-medium text-fg-secondary">
+                      {formatCurrency(acc.currentBalance, acc.currency)}
+                    </span>
+                  </span>
+                  <span>
+                    {t.accountsPage.initialCapital}:{' '}
+                    <span className="font-medium text-fg-secondary">
+                      {formatCurrency(acc.initialBalance, acc.currency)}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10.5px] text-fg-faint">
+                  <span>{acc.brokerTimezone}</span>
+                  <span>
+                    {acc.tradeCount} {t.common.tradesCount}
+                  </span>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       </div>
+
+      {/* Edit Account Modal */}
+      <Dialog open={editingAccount !== null} onOpenChange={(o) => !o && setEditingAccount(null)}>
+        <DialogContent>
+          <DialogTitle>{t.accountsPage.editModalTitle}</DialogTitle>
+          <DialogDescription>{t.accountsPage.editModalDesc}</DialogDescription>
+
+          <form onSubmit={handleUpdateAccount} className="mt-5 space-y-3.5">
+            <div className="space-y-1">
+              <label className="text-xs text-fg-muted">{t.accountsPage.fieldName}</label>
+              <Input
+                required
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-fg-muted">{t.accountsPage.fieldLogin}</label>
+                <Input
+                  disabled
+                  className="font-num opacity-70"
+                  value={editingAccount?.accountNumber ?? ''}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-fg-muted">{t.accountsPage.fieldBroker}</label>
+                <Input
+                  value={editBroker}
+                  onChange={(e) => setEditBroker(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-fg-muted">
+                  {t.accountsPage.fieldInitBalance}
+                </label>
+                <Input
+                  className="font-num"
+                  placeholder="100,000"
+                  value={editInitialBalance}
+                  onChange={(e) => setEditInitialBalance(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-fg-muted">{t.accountsPage.fieldCurrency}</label>
+                <Input
+                  className="font-num uppercase"
+                  value={editCurrency}
+                  onChange={(e) => setEditCurrency(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-fg-muted">{t.accountsPage.fieldBrokerTz}</label>
+              <Select value={editBrokerTz} onValueChange={setEditBrokerTz}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BROKER_TIMEZONE_PRESETS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-fg-muted">{t.accountsPage.fieldDisplayTz}</label>
+              <Select value={editDisplayTz} onValueChange={setEditDisplayTz}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DISPLAY_TIMEZONE_PRESETS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setEditingAccount(null)}
+              >
+                {t.common.cancel}
+              </Button>
+              <Button type="submit" size="sm" disabled={updatingAcc}>
+                {updatingAcc ? t.common.saving : t.accountsPage.saveChangesBtn}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Strategy Tags Card */}
       <Card>

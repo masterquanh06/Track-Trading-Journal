@@ -167,7 +167,7 @@ export default function ImportPage() {
             <div className="flex items-center gap-2">
               <Badge variant="default">
                 <Zap className="h-3 w-3" />
-                Auto-Sync Realtime · v1.10
+                Auto-Sync Realtime · v1.20
               </Badge>
               <span className="text-xs text-fg-muted">{t.importPage.noMetaEditor}</span>
             </div>

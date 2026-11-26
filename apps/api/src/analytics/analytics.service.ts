@@ -10,6 +10,7 @@ import {
   CalendarDaySummary,
   EquityCurvePoint,
   EquityCurveResponse,
+  reconcileAccountCapital,
   SessionBreakdownItem,
   TagBreakdownItem,
   ZellaScoreSummary,
@@ -209,12 +210,13 @@ export class AnalyticsService {
     }
 
     let startingEquity = accounts.reduce((sum, acc) => {
-      if (acc.currentBalance !== undefined && acc.currentBalance !== null) {
-        const liveBal = new Decimal(acc.currentBalance.toString());
-        const allTimePnl = allTimePnlByAcc.get(acc.id) ?? new Decimal(0);
-        return sum.plus(liveBal.minus(allTimePnl));
-      }
-      return sum.plus(new Decimal(acc.initialBalance.toString()));
+      const allTimePnl = allTimePnlByAcc.get(acc.id) ?? new Decimal(0);
+      const reconciled = reconcileAccountCapital({
+        initialBalance: acc.initialBalance.toString(),
+        storedLiveBalance: acc.currentBalance?.toString() ?? null,
+        allTimeClosedNetPnl: allTimePnl.toString(),
+      });
+      return sum.plus(new Decimal(reconciled.baseBalanceBeforeTrades));
     }, new Decimal(0));
 
     const fromUtc =

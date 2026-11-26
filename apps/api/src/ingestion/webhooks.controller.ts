@@ -22,13 +22,18 @@ export class WebhooksController {
   async receiveSingleTrade(
     @Body(new ZodValidationPipe(Mt5SingleWebhookSchema)) payload: Mt5SingleWebhookPayload,
   ) {
+    const liveBalance = payload.accountBalance ?? payload.balance ?? null;
+    const liveEquity = payload.accountEquity ?? payload.equity ?? null;
+    const initialCapital = payload.initialCapital ?? null;
+
     const account = await this.accountsService.findOrCreateByMt5AccountNumber({
       accountNumber: payload.accountNumber,
       broker: payload.broker,
       currency: payload.currency,
       brokerTimezone: payload.brokerTimezone,
-      accountBalance: payload.accountBalance,
-      accountEquity: payload.accountEquity,
+      initialCapital,
+      accountBalance: liveBalance,
+      accountEquity: liveEquity,
     });
 
     const brokerTimezone = payload.brokerTimezone ?? account.brokerTimezone;
@@ -39,8 +44,10 @@ export class WebhooksController {
       source: this.mt5WebhookAdapter.source,
       skippedRows: parsed.skippedRows,
       warnings: parsed.warnings,
-      accountBalance: payload.accountBalance,
-      accountEquity: payload.accountEquity,
+      initialCapital,
+      accountBalance: liveBalance,
+      accountEquity: liveEquity,
+      currency: payload.currency ?? null,
     });
   }
 
@@ -48,13 +55,18 @@ export class WebhooksController {
   async receiveBatchTrades(
     @Body(new ZodValidationPipe(Mt5BatchWebhookSchema)) payload: Mt5BatchWebhookPayload,
   ) {
+    const liveBalance = payload.accountBalance ?? payload.balance ?? null;
+    const liveEquity = payload.accountEquity ?? payload.equity ?? null;
+    const initialCapital = payload.initialCapital ?? null;
+
     const account = await this.accountsService.findOrCreateByMt5AccountNumber({
       accountNumber: payload.accountNumber,
       broker: payload.broker,
       currency: payload.currency,
       brokerTimezone: payload.brokerTimezone,
-      accountBalance: payload.accountBalance,
-      accountEquity: payload.accountEquity,
+      initialCapital,
+      accountBalance: liveBalance,
+      accountEquity: liveEquity,
     });
 
     const brokerTimezone = payload.brokerTimezone ?? account.brokerTimezone;
@@ -65,8 +77,10 @@ export class WebhooksController {
       source: this.mt5WebhookAdapter.source,
       skippedRows: parsed.skippedRows,
       warnings: parsed.warnings,
-      accountBalance: payload.accountBalance,
-      accountEquity: payload.accountEquity,
+      initialCapital,
+      accountBalance: liveBalance,
+      accountEquity: liveEquity,
+      currency: payload.currency ?? null,
     });
   }
 }

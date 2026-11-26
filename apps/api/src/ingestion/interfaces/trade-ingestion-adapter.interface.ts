@@ -27,10 +27,18 @@ export interface NormalizedTradeInput {
   rawPayload: Prisma.InputJsonValue;
 }
 
+export interface AccountSnapshotInput {
+  initialCapital?: string | null;
+  balance?: string | null;
+  equity?: string | null;
+  currency?: string | null;
+}
+
 export interface AdapterParseResult {
   trades: NormalizedTradeInput[];
   skippedRows: number;
   warnings: string[];
+  accountSnapshot?: AccountSnapshotInput;
 }
 
 export interface ITradeIngestionAdapter<TInput> {
