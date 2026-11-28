@@ -193,19 +193,19 @@ export default function ImportPage() {
         <CardContent className="space-y-3">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-500">
+              <span className="font-num font-semibold text-[var(--accent-fg)]">
                 {t.importPage.step1Title}
               </span>
               <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step1Desc}</p>
             </div>
             <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-500">
+              <span className="font-num font-semibold text-[var(--accent-fg)]">
                 {t.importPage.step2Title}
               </span>
               <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step2Desc}</p>
             </div>
             <div className="rounded-lg border border-border bg-elevated p-3 text-xs">
-              <span className="font-num font-semibold text-indigo-500">
+              <span className="font-num font-semibold text-[var(--accent-fg)]">
                 {t.importPage.step3Title}
               </span>
               <p className="mt-1 leading-relaxed text-fg-muted">{t.importPage.step3Desc}</p>
@@ -290,7 +290,7 @@ export default function ImportPage() {
             className={cn(
               'group relative flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-all duration-150',
               dragActive
-                ? 'border-indigo-500 bg-[var(--accent-bg)]'
+                ? 'border-[var(--accent-border)] bg-[var(--accent-bg)]'
                 : file
                   ? 'border-[var(--profit-border)] bg-[var(--profit-bg)]'
                   : 'border-border-strong bg-subtle hover:bg-hover',
@@ -342,7 +342,7 @@ export default function ImportPage() {
               <>
                 <p className="mt-3 text-sm font-medium text-fg">
                   {t.importPage.dropPrompt}{' '}
-                  <span className="text-indigo-500 underline underline-offset-4">
+                  <span className="text-[var(--accent-fg)] underline underline-offset-4">
                     {t.importPage.browseFiles}
                   </span>
                 </p>

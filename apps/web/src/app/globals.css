@@ -1,3 +1,8 @@
+@import '@astryxdesign/theme-neutral/fonts.css';
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/theme-neutral/theme.css';
+
 @import '@fontsource/inter/400.css';
 @import '@fontsource/inter/500.css';
 @import '@fontsource/inter/600.css';
@@ -14,26 +19,28 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light Theme Tokens */
+  /* Light Theme Tokens — bridged to Astryx Neutral theme tokens */
   :root,
-  html.light {
-    --bg-canvas: #f6f7f9;
-    --bg-sidebar: #eff1f5;
-    --bg-topbar: rgba(246, 247, 249, 0.9);
-    --bg-surface: #ffffff;
-    --bg-elevated: #f1f3f7;
-    --bg-popover: #ffffff;
-    --bg-subtle: rgba(15, 23, 42, 0.03);
-    --bg-hover: rgba(15, 23, 42, 0.055);
-    --bg-active: #ffffff;
+  html.light,
+  html[data-theme='light'],
+  html.light [data-astryx-theme] {
+    --bg-canvas: var(--color-background-body, #f6f7f9);
+    --bg-sidebar: var(--color-background-muted, #eff1f5);
+    --bg-topbar: color-mix(in srgb, var(--color-background-body, #f6f7f9) 88%, transparent);
+    --bg-surface: var(--color-background-card, #ffffff);
+    --bg-elevated: var(--color-background-surface, #f1f3f7);
+    --bg-popover: var(--color-background-card, #ffffff);
+    --bg-subtle: color-mix(in srgb, var(--color-text-primary, #09090b) 3.5%, transparent);
+    --bg-hover: color-mix(in srgb, var(--color-text-primary, #09090b) 6%, transparent);
+    --bg-active: var(--color-background-card, #ffffff);
 
-    --border-subtle: rgba(15, 23, 42, 0.09);
-    --border-strong: rgba(15, 23, 42, 0.16);
+    --border-subtle: var(--color-border, rgba(15, 23, 42, 0.1));
+    --border-strong: var(--color-border-emphasized, rgba(15, 23, 42, 0.18));
 
-    --fg-primary: #09090b;
-    --fg-secondary: #27272a;
-    --fg-muted: #64748b;
-    --fg-faint: #94a3b8;
+    --fg-primary: var(--color-text-primary, #09090b);
+    --fg-secondary: var(--color-text-secondary, #27272a);
+    --fg-muted: color-mix(in srgb, var(--color-text-secondary, #52525b) 88%, var(--color-background-body, #f6f7f9));
+    --fg-faint: color-mix(in srgb, var(--color-text-secondary, #71717a) 68%, var(--color-background-body, #f6f7f9));
 
     --profit-fg: #059669;
     --profit-bg: rgba(16, 185, 129, 0.11);
@@ -43,36 +50,39 @@
     --loss-bg: rgba(244, 63, 94, 0.1);
     --loss-border: rgba(244, 63, 94, 0.26);
 
-    --accent-fg: #4f46e5;
-    --accent-bg: rgba(99, 102, 241, 0.11);
-    --accent-border: rgba(99, 102, 241, 0.28);
+    --accent-fg: var(--color-text-accent, #4f46e5);
+    --accent-bg: color-mix(in srgb, var(--color-accent, #4f46e5) 11%, transparent);
+    --accent-border: color-mix(in srgb, var(--color-accent, #4f46e5) 28%, transparent);
+    --focus-ring: var(--color-focus-ring, var(--color-accent, #4f46e5));
 
-    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
-    --shadow-float: 0 16px 40px rgba(15, 23, 42, 0.14);
+    --shadow-card: var(--shadow-low, 0 1px 2px rgba(15, 23, 42, 0.04));
+    --shadow-float: var(--shadow-high, 0 16px 40px rgba(15, 23, 42, 0.14));
 
-    --radius: 0.625rem;
-    color-scheme: light;
+    --radius: var(--radius-container, 0.625rem);
+    color-scheme: light !important;
   }
 
-  /* Dark Theme Tokens (Default Obsidian Dark) */
-  html.dark {
-    --bg-canvas: #09090b;
-    --bg-sidebar: #0b0c0f;
-    --bg-topbar: rgba(9, 9, 11, 0.88);
-    --bg-surface: #111216;
-    --bg-elevated: #16181d;
-    --bg-popover: #16181d;
-    --bg-subtle: rgba(255, 255, 255, 0.03);
-    --bg-hover: rgba(255, 255, 255, 0.05);
-    --bg-active: #1f222b;
+  /* Dark Theme Tokens — bridged to Astryx Neutral dark tokens */
+  html.dark,
+  html[data-theme='dark'],
+  html.dark [data-astryx-theme] {
+    --bg-canvas: var(--color-background-body, #09090b);
+    --bg-sidebar: var(--color-background-muted, #0b0c0f);
+    --bg-topbar: color-mix(in srgb, var(--color-background-body, #09090b) 88%, transparent);
+    --bg-surface: var(--color-background-card, #111216);
+    --bg-elevated: var(--color-background-surface, #16181d);
+    --bg-popover: var(--color-background-card, #16181d);
+    --bg-subtle: color-mix(in srgb, var(--color-text-primary, #f4f4f5) 3.5%, transparent);
+    --bg-hover: color-mix(in srgb, var(--color-text-primary, #f4f4f5) 6.5%, transparent);
+    --bg-active: var(--color-background-surface, #1f222b);
 
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.15);
+    --border-subtle: var(--color-border, rgba(255, 255, 255, 0.09));
+    --border-strong: var(--color-border-emphasized, rgba(255, 255, 255, 0.18));
 
-    --fg-primary: #f4f4f5;
-    --fg-secondary: #d4d4d8;
-    --fg-muted: #8e8e98;
-    --fg-faint: #63636e;
+    --fg-primary: var(--color-text-primary, #f4f4f5);
+    --fg-secondary: var(--color-text-secondary, #d4d4d8);
+    --fg-muted: color-mix(in srgb, var(--color-text-secondary, #a1a1aa) 82%, var(--color-background-body, #09090b));
+    --fg-faint: color-mix(in srgb, var(--color-text-secondary, #71717a) 60%, var(--color-background-body, #09090b));
 
     --profit-fg: #34d399;
     --profit-bg: rgba(16, 185, 129, 0.12);
@@ -82,14 +92,15 @@
     --loss-bg: rgba(244, 63, 94, 0.12);
     --loss-border: rgba(244, 63, 94, 0.24);
 
-    --accent-fg: #818cf8;
-    --accent-bg: rgba(99, 102, 241, 0.14);
-    --accent-border: rgba(99, 102, 241, 0.3);
+    --accent-fg: var(--color-text-accent, #818cf8);
+    --accent-bg: color-mix(in srgb, var(--color-accent, #818cf8) 14%, transparent);
+    --accent-border: color-mix(in srgb, var(--color-accent, #818cf8) 30%, transparent);
+    --focus-ring: var(--color-focus-ring, var(--color-accent, #818cf8));
 
-    --shadow-card: none;
-    --shadow-float: 0 18px 50px rgba(0, 0, 0, 0.72);
+    --shadow-card: var(--shadow-low, none);
+    --shadow-float: var(--shadow-high, 0 18px 50px rgba(0, 0, 0, 0.72));
 
-    color-scheme: dark;
+    color-scheme: dark !important;
   }
 
   * {
@@ -99,7 +110,7 @@
   body {
     background-color: var(--bg-canvas);
     color: var(--fg-primary);
-    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-family-body, 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 150ms ease, color 150ms ease;
@@ -125,7 +136,7 @@
   }
 }
 
-/* Explicit semantic theme bindings (ensures instant HMR even if PostCSS cached prior config) */
+/* Explicit semantic theme bindings */
 .bg-canvas {
   background-color: var(--bg-canvas);
 }
@@ -226,6 +237,6 @@
 }
 
 .font-num {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-family: var(--font-family-code, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace);
   font-variant-numeric: tabular-nums;
 }

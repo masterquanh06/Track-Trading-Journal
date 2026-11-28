@@ -329,7 +329,7 @@ export default function AccountsPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
-            <Link2 className="h-4 w-4 text-indigo-500" />
+            <Link2 className="h-4 w-4 text-[var(--accent-fg)]" />
             {t.accountsPage.webhookTitle}
           </CardTitle>
           <CardDescription>
@@ -553,7 +553,7 @@ export default function AccountsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TagIcon className="h-4 w-4 text-indigo-500" />
+            <TagIcon className="h-4 w-4 text-[var(--accent-fg)]" />
             {t.accountsPage.tagsTitle} ({tags.length})
           </CardTitle>
           <CardDescription>{t.accountsPage.tagsDesc}</CardDescription>
@@ -576,7 +576,7 @@ export default function AccountsPage() {
                   className={cn(
                     'h-4 w-4 rounded-full transition-transform',
                     tagColor === c
-                      ? 'scale-110 ring-2 ring-indigo-500 ring-offset-1 ring-offset-surface'
+                      ? 'scale-110 ring-2 ring-ring ring-offset-1 ring-offset-surface'
                       : 'opacity-65 hover:opacity-100',
                   )}
                   style={{ backgroundColor: c }}

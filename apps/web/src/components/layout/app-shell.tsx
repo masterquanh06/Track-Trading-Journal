@@ -89,9 +89,9 @@ function SidebarContent() {
           aria-label={sidebarCollapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
           data-testid="sidebar-toggle-btn"
           className={cn(
-            'flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60',
+            'flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
             sidebarCollapsed
-              ? 'h-9 w-9 border border-border bg-surface text-fg-secondary shadow-card hover:border-indigo-500/50 hover:text-indigo-500'
+              ? 'h-9 w-9 border border-border bg-surface text-fg-secondary shadow-card hover:border-border-strong hover:text-fg'
               : 'h-8 w-8 text-fg-muted hover:bg-hover hover:text-fg',
           )}
         >

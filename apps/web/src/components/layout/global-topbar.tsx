@@ -90,7 +90,7 @@ export function GlobalTopbar() {
           >
             <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-1.5">
-                <Wallet className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                <Wallet className="h-3.5 w-3.5 shrink-0 text-[var(--accent-fg)]" />
                 <span className="truncate text-[12.5px] font-medium text-fg">
                   {selectedAccount
                     ? selectedAccount.name
@@ -217,7 +217,7 @@ export function GlobalTopbar() {
           onClick={() => void triggerGlobalRefresh()}
         >
           <RefreshCw
-            className={cn('h-3.5 w-3.5 text-fg-secondary', isRefreshing && 'animate-spin text-indigo-500')}
+            className={cn('h-3.5 w-3.5 text-fg-secondary', isRefreshing && 'animate-spin text-[var(--accent-fg)]')}
           />
         </Button>
       </div>

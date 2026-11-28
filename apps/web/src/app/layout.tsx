@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/layout/app-shell';
+import { AstryxProvider } from '@/components/layout/astryx-provider';
 import { PreferencesProvider } from '@/lib/preferences-context';
 import './globals.css';
 
@@ -17,6 +18,7 @@ const THEME_INIT_SCRIPT = `
     var root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
+    root.setAttribute('data-theme', theme);
     root.style.colorScheme = theme;
     var savedLocale = localStorage.getItem('tdt_locale');
     if (savedLocale === 'en' || savedLocale === 'vi') {
@@ -32,13 +34,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="dark" suppressHydrationWarning>
+    <html lang="vi" className="dark" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-screen bg-canvas font-sans text-fg">
         <PreferencesProvider>
-          <AppShell>{children}</AppShell>
+          <AstryxProvider>
+            <AppShell>{children}</AppShell>
+          </AstryxProvider>
         </PreferencesProvider>
       </body>
     </html>

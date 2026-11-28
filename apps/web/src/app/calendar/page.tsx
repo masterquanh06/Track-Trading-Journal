@@ -202,7 +202,7 @@ export default function CalendarPage() {
                     {w}
                   </div>
                 ))}
-                <div className="py-1 text-indigo-500">{t.calendar.weeklyTotal}</div>
+                <div className="py-1 text-[var(--accent-fg)]">{t.calendar.weeklyTotal}</div>
               </div>
 
               <div className="mt-2 space-y-2">

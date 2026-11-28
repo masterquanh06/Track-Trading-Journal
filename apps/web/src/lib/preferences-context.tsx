@@ -29,6 +29,7 @@ function applyDomTheme(nextTheme: ThemeMode) {
   const root = document.documentElement;
   root.classList.remove('light', 'dark');
   root.classList.add(nextTheme);
+  root.setAttribute('data-theme', nextTheme);
   root.style.colorScheme = nextTheme;
 }
 

@@ -391,7 +391,7 @@ export default function DashboardPage() {
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Activity className="h-4 w-4 text-indigo-500" />
+                <Activity className="h-4 w-4 text-[var(--accent-fg)]" />
                 {curveMode === 'equity'
                   ? 'Equity Curve'
                   : 'Cumulative Net PnL & Drawdown Underwater'}
@@ -439,7 +439,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Globe2 className="h-4 w-4 text-indigo-500" />
+            <Globe2 className="h-4 w-4 text-[var(--accent-fg)]" />
             {t.dashboard.sessionTitle}
           </CardTitle>
           <CardDescription>{t.dashboard.sessionSubtitle}</CardDescription>

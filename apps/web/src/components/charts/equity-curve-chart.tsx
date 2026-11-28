@@ -40,7 +40,11 @@ export function EquityCurveChart({
     if (!el || points.length === 0) return;
 
     const isDark = theme === 'dark';
-    const chartBg = isDark ? '#111216' : '#FFFFFF';
+    const computedSurface =
+      typeof window !== 'undefined'
+        ? getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim()
+        : '';
+    const chartBg = computedSurface || (isDark ? '#111216' : '#FFFFFF');
     const textColor = isDark ? '#8E8E98' : '#64748B';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)';
     const scaleBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.10)';

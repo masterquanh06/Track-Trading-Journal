@@ -36,8 +36,8 @@ const config: Config = {
           foreground: 'var(--fg-primary)',
         },
         primary: {
-          DEFAULT: '#6366F1',
-          foreground: '#FFFFFF',
+          DEFAULT: 'var(--color-accent, #6366F1)',
+          foreground: 'var(--color-on-accent, #FFFFFF)',
         },
         secondary: {
           DEFAULT: 'var(--bg-elevated)',
@@ -52,13 +52,13 @@ const config: Config = {
           foreground: 'var(--fg-primary)',
         },
         destructive: {
-          DEFAULT: '#F43F5E',
+          DEFAULT: 'var(--loss-fg)',
           foreground: '#FFFFFF',
         },
         border: 'var(--border-subtle)',
         'border-strong': 'var(--border-strong)',
         input: 'var(--border-subtle)',
-        ring: '#6366F1',
+        ring: 'var(--focus-ring)',
         profit: 'var(--profit-fg)',
         loss: 'var(--loss-fg)',
       },
